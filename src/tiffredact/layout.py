@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from typing import Any
+from xml.etree import ElementTree
 
 import tifftools
 
@@ -49,8 +50,38 @@ class LayoutError(Exception):
 
 
 def read_info(path: str) -> dict[str, Any]:
-    """Read the IFD tree with tifftools."""
-    return tifftools.read_tiff(path)
+    """Read the IFD tree with tifftools and prune SubIFD chains that leak."""
+    info = tifftools.read_tiff(path)
+    prune_leaked_subifd_chains(info)
+    return info
+
+
+def prune_leaked_subifd_chains(info: dict[str, Any]) -> int:
+    """Cut SubIFD chains whose next-IFD pointer runs into the main chain.
+
+    Some writers leave the "next IFD" pointer of the last sub-resolution IFD
+    pointing at the following top-level IFD. Following it would attach the
+    main image to the wrong pyramid and write it twice. Returns the number of
+    chains truncated.
+    """
+    top_offsets = {int(ifd["offset"]) for ifd in info["ifds"]}
+    truncated = 0
+    for ifd in info["ifds"]:
+        entry = ifd["tags"].get(TAG_SUB_IFDS)
+        if entry is None:
+            continue
+        for index, chain in enumerate(entry.get("ifds", [])):
+            for position, sub in enumerate(chain):
+                if int(sub["offset"]) in top_offsets:
+                    logger.warning(
+                        "SubIFD chain of IFD at %d runs into top-level IFD at %d; truncating",
+                        ifd["offset"],
+                        sub["offset"],
+                    )
+                    entry["ifds"][index] = chain[:position]
+                    truncated += 1
+                    break
+    return truncated
 
 
 def _entry_data(ifd: dict[str, Any], tag: int) -> Any:
@@ -165,6 +196,30 @@ def iter_all_ifds(info: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from iter_sub_ifds(ifd)
 
 
+def ome_image_names(description: str) -> dict[int, str]:
+    """Map top-level IFD index -> OME Image name, from the OME-XML header."""
+    if "<OME" not in description:
+        return {}
+    try:
+        root = ElementTree.fromstring(description)
+    except ElementTree.ParseError as exc:
+        logger.warning("Could not parse OME-XML: %s", exc)
+        return {}
+    names: dict[int, str] = {}
+    for image in root.iter():
+        if not image.tag.endswith("}Image") and image.tag != "Image":
+            continue
+        name = image.get("Name", "")
+        for tiffdata in image.iter():
+            if not (tiffdata.tag.endswith("}TiffData") or tiffdata.tag == "TiffData"):
+                continue
+            first = int(tiffdata.get("IFD", "0"))
+            count = int(tiffdata.get("PlaneCount", "1"))
+            for index in range(first, first + count):
+                names[index] = name
+    return names
+
+
 def detect_vendor(first_description: str) -> str:
     if first_description.startswith("Aperio"):
         return "aperio"
@@ -261,7 +316,42 @@ def discover(info: dict[str, Any]) -> Layout:
         _discover_aperio(chain, layout)
     else:
         _discover_generic(chain, subs, layout)
+        names = ome_image_names(chain[0].description) if vendor == "ome" else {}
+        _separate_secondary_images(chain, layout, names)
     return layout
+
+
+def _separate_secondary_images(
+    chain: list[ImageIFD], layout: Layout, names: dict[int, str]
+) -> None:
+    """Keep only pyramids whose full image matches the primary (largest) size.
+
+    OME-TIFF files may carry overview/macro/label images alongside the slide.
+    Those live in their own coordinate space, so regions must not be mapped
+    onto them. Multi-plane images (channels, z) share the primary size and
+    all receive the redaction.
+    """
+    if not layout.images:
+        return
+    primary = max(layout.images, key=lambda img: img.full.width * img.full.height)
+    size = (primary.full.width, primary.full.height)
+    index_by_offset = {ifd.offset: i for i, ifd in enumerate(chain)}
+    kept: list[PyramidImage] = []
+    for image in layout.images:
+        if (image.full.width, image.full.height) == size:
+            kept.append(image)
+            continue
+        name = names.get(index_by_offset.get(image.full.offset, -1), "").lower()
+        if "macro" in name or "overview" in name:
+            group, role = layout.macro, Role.MACRO
+        elif "label" in name:
+            group, role = layout.label, Role.LABEL
+        else:
+            group, role = layout.other, Role.OTHER
+        for level in image.levels:
+            level.role = role
+            group.append(level)
+    layout.images = kept
 
 
 def describe(layout: Layout) -> str:

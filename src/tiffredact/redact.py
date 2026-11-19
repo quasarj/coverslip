@@ -140,6 +140,11 @@ def redact_file(
     """Redact ``regions`` (full-resolution coordinates) into a new file."""
     info = layout_mod.read_info(input_path)
     layout = layout_mod.discover(info)
+    if (drop_label or drop_macro) and layout.vendor == "ome":
+        raise RedactionError(
+            "Dropping label/macro images from OME-TIFF is not supported: the "
+            "OME-XML references IFDs by index and would need rewriting"
+        )
     _validate_regions(layout, regions)
     work = plan_work(layout, regions)
     report = RedactionReport(input_path, output_path, list(regions))

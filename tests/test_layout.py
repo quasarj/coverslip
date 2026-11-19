@@ -77,3 +77,76 @@ def test_aperio_sample_layout(path: str) -> None:
     assert not layout.other
     for level in levels:
         assert len(level.data_offsets) == level.chunk_count
+
+
+def test_prune_leaked_subifd_chain() -> None:
+    main = {"offset": 500, "tags": {}}
+    leaked = [{"offset": 100, "tags": {}}, main]
+    info = {
+        "ifds": [
+            {
+                "offset": 16,
+                "tags": {330: {"ifds": [[{"offset": 50, "tags": {}}], leaked]}},
+            },
+            main,
+        ]
+    }
+    assert layout_mod.prune_leaked_subifd_chains(info) == 1
+    chains = info["ifds"][0]["tags"][330]["ifds"]
+    assert [[sub["offset"] for sub in chain] for chain in chains] == [[50], [100]]
+
+
+def test_ome_secondary_image_is_classified_as_macro(tmp_path: Path) -> None:
+    import tifffile
+
+    path = tmp_path / "with_macro.ome.tif"
+    main = make_image(256, 320)
+    macro = make_image(120, 80, seed=3)
+    with tifffile.TiffWriter(path, ome=True) as writer:
+        writer.write(
+            macro, compression="lzw", metadata={"axes": "YXS", "Name": "macro"}
+        )
+        writer.write(
+            main,
+            tile=(64, 64),
+            compression="lzw",
+            subifds=1,
+            metadata={"axes": "YXS", "Name": "slide"},
+        )
+        writer.write(main[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw")
+    layout = discover(path)
+    assert layout.vendor == "ome"
+    assert len(layout.images) == 1
+    assert layout.images[0].full.width == 320
+    assert [ifd.width for ifd in layout.macro] == [80]
+    assert [ifd.role for ifd in layout.macro] == [Role.MACRO]
+
+
+def test_ome_regions_skip_macro_and_drop_is_refused(tmp_path: Path) -> None:
+    import tifffile
+
+    from tiffredact.model import Region
+    from tiffredact.redact import RedactionError, redact_file
+
+    path = tmp_path / "with_macro.ome.tif"
+    main = make_image(256, 320)
+    macro = make_image(120, 80, seed=3)
+    with tifffile.TiffWriter(path, ome=True) as writer:
+        writer.write(
+            macro, compression="lzw", metadata={"axes": "YXS", "Name": "macro"}
+        )
+        writer.write(main, tile=(64, 64), compression="lzw", metadata={"axes": "YXS"})
+    out = tmp_path / "out.ome.tif"
+    redact_file(str(path), str(out), [Region(200, 150, 100, 80)])
+    with tifffile.TiffFile(out) as tf:
+        macro_out = [s for s in tf.series if s.shape[1] == 80][0].asarray()
+        main_out = [s for s in tf.series if s.shape[1] == 320][0].asarray()
+    assert np.array_equal(macro_out, macro)
+    assert main_out[150:230, 200:300].max() == 0
+    with pytest.raises(RedactionError):
+        redact_file(
+            str(path),
+            str(tmp_path / "x.ome.tif"),
+            [Region(0, 0, 10, 10)],
+            drop_macro=True,
+        )
