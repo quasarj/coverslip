@@ -18,7 +18,9 @@ PHOTOMETRIC_YCBCR = 6
 PHOTOMETRIC_MINISBLACK = 1
 
 
-def encode(image: np.ndarray, subsampling: str | None, colorspace: str | None = None) -> bytes:
+def encode(
+    image: np.ndarray, subsampling: str | None, colorspace: str | None = None
+) -> bytes:
     kwargs = {"level": 85}
     if subsampling:
         kwargs["subsampling"] = subsampling
@@ -30,11 +32,15 @@ def encode(image: np.ndarray, subsampling: str | None, colorspace: str | None = 
 
 def decode(data: bytes, colorspace: str | None = None) -> np.ndarray:
     if colorspace:
-        return imagecodecs.jpeg8_decode(data, colorspace=colorspace, outcolorspace=colorspace)
+        return imagecodecs.jpeg8_decode(
+            data, colorspace=colorspace, outcolorspace=colorspace
+        )
     return imagecodecs.jpeg8_decode(data)
 
 
-@pytest.mark.parametrize("subsampling,mcu_x,mcu_y", [("444", 8, 8), ("422", 16, 8), ("420", 16, 16)])
+@pytest.mark.parametrize(
+    "subsampling,mcu_x,mcu_y", [("444", 8, 8), ("422", 16, 8), ("420", 16, 16)]
+)
 def test_untouched_blocks_are_bit_exact_and_region_is_black(
     subsampling: str, mcu_x: int, mcu_y: int
 ) -> None:
@@ -64,16 +70,24 @@ def test_untouched_blocks_are_bit_exact_and_region_is_black(
 def test_rgb_codestream_fill_uses_rgb_values() -> None:
     image = make_image(64, 64)
     original = encode(image, "444", colorspace="RGB")
-    out = redact_jpeg(original, None, [Region(0, 0, 16, 16)], (255, 0, 0), PHOTOMETRIC_RGB)
+    out = redact_jpeg(
+        original, None, [Region(0, 0, 16, 16)], (255, 0, 0), PHOTOMETRIC_RGB
+    )
     after = decode(out, colorspace="RGB")
     block = after[0:16, 0:16].astype(int)
-    assert block[..., 0].min() >= 253 and block[..., 1].max() <= 2 and block[..., 2].max() <= 2
+    assert (
+        block[..., 0].min() >= 253
+        and block[..., 1].max() <= 2
+        and block[..., 2].max() <= 2
+    )
 
 
 def test_grayscale() -> None:
     image = make_image(64, 64)[:, :, 0]
     original = encode(image, None)
-    out = redact_jpeg(original, None, [Region(8, 8, 8, 8)], (0, 0, 0), PHOTOMETRIC_MINISBLACK)
+    out = redact_jpeg(
+        original, None, [Region(8, 8, 8, 8)], (0, 0, 0), PHOTOMETRIC_MINISBLACK
+    )
     after = decode(out)
     before = decode(original)
     assert after[8:16, 8:16].max() == 0
@@ -83,7 +97,9 @@ def test_grayscale() -> None:
 def test_white_fill_saturates() -> None:
     image = make_image(64, 64)
     original = encode(image, "420")
-    out = redact_jpeg(original, None, [Region(0, 0, 32, 32)], (255, 255, 255), PHOTOMETRIC_YCBCR)
+    out = redact_jpeg(
+        original, None, [Region(0, 0, 32, 32)], (255, 255, 255), PHOTOMETRIC_YCBCR
+    )
     assert decode(out)[0:30, 0:30].min() == 255
 
 
@@ -130,7 +146,9 @@ def test_join_tables_validation() -> None:
 
 
 def test_strip_app0_only_removes_jfif() -> None:
-    jfif = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    jfif = (
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    )
     assert strip_app0(jfif) == b"\xff\xd8\xff\xd9"
     other = b"\xff\xd8\xff\xee\x00\x04ab\xff\xd9"
     assert strip_app0(other) == other

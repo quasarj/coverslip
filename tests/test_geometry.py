@@ -1,14 +1,35 @@
-from tiffredact.geometry import chunk_at, covers_chunk, intersecting_chunks, scale_region
+from tiffredact.geometry import (
+    chunk_at,
+    covers_chunk,
+    intersecting_chunks,
+    scale_region,
+)
 from tiffredact.model import Chunk, ImageIFD, Region, Role
 
 
 def make_ifd(width: int, height: int, tiled: bool, cw: int, ch: int) -> ImageIFD:
     return ImageIFD(
-        offset=0, width=width, height=height, tiled=tiled, chunk_width=cw, chunk_height=ch,
-        compression=1, photometric=2, bits_per_sample=8, samples_per_pixel=3,
-        planar_config=1, predictor=1, sample_format=1, subsampling=None, jpegtables=None,
-        new_subfile_type=0, description="", data_offsets=[], data_bytecounts=[],
-        big_endian=False, role=Role.FULL,
+        offset=0,
+        width=width,
+        height=height,
+        tiled=tiled,
+        chunk_width=cw,
+        chunk_height=ch,
+        compression=1,
+        photometric=2,
+        bits_per_sample=8,
+        samples_per_pixel=3,
+        planar_config=1,
+        predictor=1,
+        sample_format=1,
+        subsampling=None,
+        jpegtables=None,
+        new_subfile_type=0,
+        description="",
+        data_offsets=[],
+        data_bytecounts=[],
+        big_endian=False,
+        role=Role.FULL,
     )
 
 

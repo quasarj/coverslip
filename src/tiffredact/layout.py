@@ -208,7 +208,9 @@ def _discover_aperio(chain: list[ImageIFD], layout: Layout) -> None:
         elif is_reduced_copy(image.full, ifd):
             image.levels.append(ifd)
         else:
-            logger.warning("Unrecognised Aperio IFD at offset %d: %s", ifd.offset, ifd.label())
+            logger.warning(
+                "Unrecognised Aperio IFD at offset %d: %s", ifd.offset, ifd.label()
+            )
             layout.other.append(ifd)
     _assign_roles(image)
     layout.images.append(image)
@@ -263,13 +265,22 @@ def discover(info: dict[str, Any]) -> Layout:
 
 
 def describe(layout: Layout) -> str:
-    lines = [f"{layout.path}", f"format: {'BigTIFF' if layout.bigtiff else 'classic TIFF'}  vendor: {layout.vendor}"]
+    lines = [
+        f"{layout.path}",
+        f"format: {'BigTIFF' if layout.bigtiff else 'classic TIFF'}  vendor: {layout.vendor}",
+    ]
     for n, image in enumerate(layout.images):
         lines.append(f"image {n}:")
         for level in image.levels:
             scale = image.full.width / level.width
-            lines.append(f"  ifd@{level.offset:<12d} {level.label()} downsample={scale:.4f}")
-    for name, group in (("label", layout.label), ("macro", layout.macro), ("other", layout.other)):
+            lines.append(
+                f"  ifd@{level.offset:<12d} {level.label()} downsample={scale:.4f}"
+            )
+    for name, group in (
+        ("label", layout.label),
+        ("macro", layout.macro),
+        ("other", layout.other),
+    ):
         for ifd in group:
             lines.append(f"{name}: ifd@{ifd.offset:<12d} {ifd.label()}")
     return "\n".join(lines)

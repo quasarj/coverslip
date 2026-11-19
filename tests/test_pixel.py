@@ -7,13 +7,31 @@ from tiffredact.model import Chunk, ImageIFD, Region, Role
 from conftest import make_image
 
 
-def make_ifd(compression: int, predictor: int = 1, spp: int = 3, bits: int = 8) -> ImageIFD:
+def make_ifd(
+    compression: int, predictor: int = 1, spp: int = 3, bits: int = 8
+) -> ImageIFD:
     return ImageIFD(
-        offset=0, width=64, height=48, tiled=True, chunk_width=64, chunk_height=48,
-        compression=compression, photometric=2 if spp == 3 else 1, bits_per_sample=bits,
-        samples_per_pixel=spp, planar_config=1, predictor=predictor, sample_format=1,
-        subsampling=None, jpegtables=None, new_subfile_type=0, description="",
-        data_offsets=[0], data_bytecounts=[0], big_endian=False, role=Role.FULL,
+        offset=0,
+        width=64,
+        height=48,
+        tiled=True,
+        chunk_width=64,
+        chunk_height=48,
+        compression=compression,
+        photometric=2 if spp == 3 else 1,
+        bits_per_sample=bits,
+        samples_per_pixel=spp,
+        planar_config=1,
+        predictor=predictor,
+        sample_format=1,
+        subsampling=None,
+        jpegtables=None,
+        new_subfile_type=0,
+        description="",
+        data_offsets=[0],
+        data_bytecounts=[0],
+        big_endian=False,
+        role=Role.FULL,
     )
 
 
@@ -45,10 +63,12 @@ def test_lossless_round_trip_outside_rect(compression: int, predictor: int) -> N
 
 def test_sixteen_bit_fill_is_scaled() -> None:
     ifd = make_ifd(pixel.COMPRESSION_LZW, 2, spp=1, bits=16)
-    image = (make_image(48, 64)[:, :, :1].astype(np.uint16) * 257)
+    image = make_image(48, 64)[:, :, :1].astype(np.uint16) * 257
     chunk = Chunk(0, 0, 0, 64, 48)
     encoded = pixel.encode_chunk(ifd, image)
-    out = pixel.redact_pixels(ifd, encoded, chunk, [Region(0, 0, 64, 48)], (255, 255, 255))
+    out = pixel.redact_pixels(
+        ifd, encoded, chunk, [Region(0, 0, 64, 48)], (255, 255, 255)
+    )
     assert pixel.decode_chunk(ifd, out, chunk).min() == 65535
 
 

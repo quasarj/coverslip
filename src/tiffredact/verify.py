@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 RESIDUE_SAMPLE = 64
 LOSSY_INSET = 16
-LOSSY_COMPRESSIONS = {pixel.COMPRESSION_JPEG, *pixel.JPEG2000_COMPRESSIONS, pixel.COMPRESSION_WEBP}
+LOSSY_COMPRESSIONS = {
+    pixel.COMPRESSION_JPEG,
+    *pixel.JPEG2000_COMPRESSIONS,
+    pixel.COMPRESSION_WEBP,
+}
 
 
 @dataclass
@@ -61,10 +65,17 @@ def _inset(rect: Region, amount: int) -> Region | None:
     """Shrink a rect on every side; lossy codecs may ring at the painted edge."""
     if rect.width <= 2 * amount or rect.height <= 2 * amount:
         return None
-    return Region(rect.x + amount, rect.y + amount, rect.width - 2 * amount, rect.height - 2 * amount)
+    return Region(
+        rect.x + amount,
+        rect.y + amount,
+        rect.width - 2 * amount,
+        rect.height - 2 * amount,
+    )
 
 
-def _match_levels(src: Layout, dst: Layout) -> list[tuple[ImageIFD, ImageIFD, ImageIFD]]:
+def _match_levels(
+    src: Layout, dst: Layout
+) -> list[tuple[ImageIFD, ImageIFD, ImageIFD]]:
     pairs = []
     if len(src.images) != len(dst.images):
         raise ValueError("Source and output have different image counts")
@@ -97,7 +108,15 @@ def verify_file(
                 for chunk, local in intersecting_chunks(s_level, scaled):
                     touched.setdefault(chunk.index, []).append(local)
             _check_level(
-                src_fh, dst_fh, s_level, d_level, touched, fill, report, replaced, untouched_hashes
+                src_fh,
+                dst_fh,
+                s_level,
+                d_level,
+                touched,
+                fill,
+                report,
+                replaced,
+                untouched_hashes,
             )
     _check_residue(output_path, replaced, untouched_hashes, report)
     return report
@@ -112,7 +131,9 @@ def _check_level(
     src_fh, dst_fh, s_level, d_level, touched, fill, report, replaced, untouched_hashes
 ) -> None:
     if (s_level.width, s_level.height, s_level.chunk_count) != (
-        d_level.width, d_level.height, d_level.chunk_count
+        d_level.width,
+        d_level.height,
+        d_level.chunk_count,
     ):
         report.problems.append(f"Level geometry differs at ifd@{s_level.offset}")
         return
@@ -138,7 +159,9 @@ def _check_level(
         try:
             array = pixel.decode_chunk(d_level, d_bytes, chunk)
         except Exception as exc:  # noqa: BLE001 - report, do not abort the audit
-            report.problems.append(f"Chunk {index} of ifd@{d_level.offset} failed to decode: {exc}")
+            report.problems.append(
+                f"Chunk {index} of ifd@{d_level.offset} failed to decode: {exc}"
+            )
             continue
         scaled = pixel.scale_fill(expected, array.dtype)
         inset = LOSSY_INSET if d_level.compression in LOSSY_COMPRESSIONS else 0
@@ -148,7 +171,9 @@ def _check_level(
                 clipped = _inset(clipped, inset)
             if clipped is None:
                 continue
-            window = array[clipped.y : clipped.y1, clipped.x : clipped.x1, :].astype(np.int64)
+            window = array[clipped.y : clipped.y1, clipped.x : clipped.x1, :].astype(
+                np.int64
+            )
             diff = np.abs(window - np.asarray(scaled, dtype=np.int64)).max()
             if diff > tolerance:
                 report.problems.append(
@@ -161,7 +186,10 @@ def _check_level(
 
 
 def _check_residue(
-    output_path: str, replaced: list[bytes], untouched_hashes: set[bytes], report: VerifyReport
+    output_path: str,
+    replaced: list[bytes],
+    untouched_hashes: set[bytes],
+    report: VerifyReport,
 ) -> None:
     """Search the output for complete replaced chunks.
 
@@ -173,9 +201,14 @@ def _check_residue(
     if not probes:
         return
     size = os.path.getsize(output_path)
-    with open(output_path, "rb") as fh, mmap.mmap(fh.fileno(), size, access=mmap.ACCESS_READ) as mm:
+    with (
+        open(output_path, "rb") as fh,
+        mmap.mmap(fh.fileno(), size, access=mmap.ACCESS_READ) as mm,
+    ):
         for probe in probes:
             report.residue_probes += 1
             if mm.find(probe) != -1:
-                report.problems.append("Bytes of a replaced source chunk were found in the output")
+                report.problems.append(
+                    "Bytes of a replaced source chunk were found in the output"
+                )
                 return

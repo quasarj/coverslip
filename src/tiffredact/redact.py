@@ -87,7 +87,9 @@ def plan_work(layout: Layout, regions: list[Region]) -> dict[int, dict[int, Chun
                 if scaled is None:
                     continue
                 for chunk, local in intersecting_chunks(level, scaled):
-                    item = work[level.offset].setdefault(chunk.index, ChunkWork(level, chunk))
+                    item = work[level.offset].setdefault(
+                        chunk.index, ChunkWork(level, chunk)
+                    )
                     item.rects.append(local)
     return dict(work)
 
@@ -144,17 +146,25 @@ def redact_file(
     original_size = os.path.getsize(input_path)
     replacements: dict[int, dict[int, Placement]] = {}
 
-    with ScratchStore(base=original_size, directory=os.path.dirname(os.path.abspath(output_path))) as scratch:
+    with ScratchStore(
+        base=original_size, directory=os.path.dirname(os.path.abspath(output_path))
+    ) as scratch:
         with open(input_path, "rb") as fh:
             for image in layout.images:
                 for level in image.levels:
                     level_report = LevelReport(
-                        level.offset, level.role.value, level.width, level.height, level.chunk_count
+                        level.offset,
+                        level.role.value,
+                        level.width,
+                        level.height,
+                        level.chunk_count,
                     )
                     report.levels.append(level_report)
                     for index, item in sorted(work.get(level.offset, {}).items()):
                         original = _read_chunk(fh, level, index)
-                        replacement = redact_chunk(level, original, item.chunk, item.rects, fill, use_dct)
+                        replacement = redact_chunk(
+                            level, original, item.chunk, item.rects, fill, use_dct
+                        )
                         placement = scratch.add(replacement)
                         replacements.setdefault(level.offset, {})[index] = placement
                         level_report.chunks_redacted += 1
@@ -162,7 +172,10 @@ def redact_file(
                         level_report.bytes_out += len(replacement)
                     logger.info(
                         "%s %dx%d: %d chunks rewritten",
-                        level.role.value, level.width, level.height, level_report.chunks_redacted,
+                        level.role.value,
+                        level.width,
+                        level.height,
+                        level_report.chunks_redacted,
                     )
         scratch.flush()
 

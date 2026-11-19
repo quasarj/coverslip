@@ -109,11 +109,15 @@ def sample_path(name: str) -> str | None:
     return str(candidate) if candidate.exists() else None
 
 
-requires_svs = pytest.mark.skipif(not sample_svs_paths(), reason="no *.svs samples in repo root")
+requires_svs = pytest.mark.skipif(
+    not sample_svs_paths(), reason="no *.svs samples in repo root"
+)
 
 
 def requires_sample(name: str):
-    return pytest.mark.skipif(sample_path(name) is None, reason=f"samples/{name} not downloaded")
+    return pytest.mark.skipif(
+        sample_path(name) is None, reason=f"samples/{name} not downloaded"
+    )
 
 
 def has_openslide() -> bool:
@@ -124,4 +128,6 @@ def has_openslide() -> bool:
     return True
 
 
-requires_openslide = pytest.mark.skipif(not has_openslide(), reason="openslide not available")
+requires_openslide = pytest.mark.skipif(
+    not has_openslide(), reason="openslide not available"
+)

@@ -68,7 +68,9 @@ def _jpeg_colorspace(ifd: ImageIFD) -> str | None:
 def _jpeg_subsampling(ifd: ImageIFD) -> str | None:
     if ifd.photometric != 6 or ifd.subsampling is None:
         return None
-    return {(1, 1): "444", (2, 1): "422", (2, 2): "420", (4, 1): "411"}.get(ifd.subsampling)
+    return {(1, 1): "444", (2, 1): "422", (2, 2): "420", (4, 1): "411"}.get(
+        ifd.subsampling
+    )
 
 
 def decode_chunk(ifd: ImageIFD, data: bytes, chunk: Chunk) -> np.ndarray:
@@ -103,7 +105,9 @@ def _as_chunk_shape(array: np.ndarray, shape: tuple[int, int, int]) -> np.ndarra
     if array.ndim == 2:
         array = array[:, :, np.newaxis]
     if array.shape != shape:
-        raise UnsupportedCodec(f"Decoded shape {array.shape} does not match chunk {shape}")
+        raise UnsupportedCodec(
+            f"Decoded shape {array.shape} does not match chunk {shape}"
+        )
     return np.ascontiguousarray(array)
 
 
@@ -188,7 +192,9 @@ def scale_fill(values: list[int], dtype: np.dtype) -> list[int | float]:
     return [round(v / 255 * top) for v in values]
 
 
-def paint(array: np.ndarray, rects: list[Region], ifd: ImageIFD, fill: Rgb) -> np.ndarray:
+def paint(
+    array: np.ndarray, rects: list[Region], ifd: ImageIFD, fill: Rgb
+) -> np.ndarray:
     """Paint ``rects`` (chunk-local) onto a decoded chunk in place and return it."""
     values = fill_samples(fill, ifd.photometric, ifd.samples_per_pixel)
     scaled = scale_fill(values, array.dtype)
@@ -200,7 +206,9 @@ def paint(array: np.ndarray, rects: list[Region], ifd: ImageIFD, fill: Rgb) -> n
     return array
 
 
-def redact_pixels(ifd: ImageIFD, data: bytes, chunk: Chunk, rects: list[Region], fill: Rgb) -> bytes:
+def redact_pixels(
+    ifd: ImageIFD, data: bytes, chunk: Chunk, rects: list[Region], fill: Rgb
+) -> bytes:
     array = decode_chunk(ifd, data, chunk).copy()
     paint(array, rects, ifd, fill)
     return encode_chunk(ifd, array)

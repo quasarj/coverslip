@@ -36,12 +36,18 @@ def assert_levels_redacted(
                 y1 = int(region.y1 * h / full_h) - inset
                 if x1 <= x0 or y1 <= y0:
                     continue
-                assert data[y0:y1, x0:x1].max() <= tolerance, f"level {w}x{h} not filled"
+                assert (
+                    data[y0:y1, x0:x1].max() <= tolerance
+                ), f"level {w}x{h} not filled"
 
 
 @pytest.mark.parametrize("bigtiff", [False, True])
-def test_lzw_subifd_pyramid(tmp_path: Path, rgb_image: np.ndarray, bigtiff: bool) -> None:
-    src = write_pyramid(tmp_path / "src.tif", rgb_image, predictor=True, bigtiff=bigtiff)
+def test_lzw_subifd_pyramid(
+    tmp_path: Path, rgb_image: np.ndarray, bigtiff: bool
+) -> None:
+    src = write_pyramid(
+        tmp_path / "src.tif", rgb_image, predictor=True, bigtiff=bigtiff
+    )
     out = tmp_path / "out.tif"
     report = redact_file(str(src), str(out), [REGION])
     assert report.chunks_redacted > 0
@@ -53,7 +59,9 @@ def test_lzw_subifd_pyramid(tmp_path: Path, rgb_image: np.ndarray, bigtiff: bool
         assert len(tf.series[0].levels) == 3
 
 
-def test_jpeg_420_pyramid_dct_and_pixel_paths(tmp_path: Path, jpeg_pyramid: Path) -> None:
+def test_jpeg_420_pyramid_dct_and_pixel_paths(
+    tmp_path: Path, jpeg_pyramid: Path
+) -> None:
     for use_dct in (True, False):
         out = tmp_path / f"out_{use_dct}.tif"
         redact_file(str(jpeg_pyramid), str(out), [REGION], use_dct=use_dct)
@@ -62,8 +70,12 @@ def test_jpeg_420_pyramid_dct_and_pixel_paths(tmp_path: Path, jpeg_pyramid: Path
         assert audit.ok, audit.summary()
 
 
-def test_chain_pyramid_and_multiple_regions(tmp_path: Path, rgb_image: np.ndarray) -> None:
-    src = write_pyramid(tmp_path / "chain.tif", rgb_image, chain=True, compression="zlib")
+def test_chain_pyramid_and_multiple_regions(
+    tmp_path: Path, rgb_image: np.ndarray
+) -> None:
+    src = write_pyramid(
+        tmp_path / "chain.tif", rgb_image, chain=True, compression="zlib"
+    )
     out = tmp_path / "out.tif"
     regions = [REGION, Region(300, 200, 100, 80)]
     redact_file(str(src), str(out), regions)
@@ -76,8 +88,16 @@ def test_ome_multi_plane_applies_to_every_plane(tmp_path: Path) -> None:
     with tifffile.TiffWriter(path, ome=True) as writer:
         for seed in range(2):
             plane = make_image(200, 260, seed=seed)
-            writer.write(plane, tile=(64, 64), compression="lzw", subifds=1, metadata={"axes": "YXS"})
-            writer.write(plane[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw")
+            writer.write(
+                plane,
+                tile=(64, 64),
+                compression="lzw",
+                subifds=1,
+                metadata={"axes": "YXS"},
+            )
+            writer.write(
+                plane[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw"
+            )
     out = tmp_path / "out.ome.tif"
     region = Region(70, 70, 60, 60)
     redact_file(str(path), str(out), [region])
@@ -102,13 +122,17 @@ def test_fill_colour(tmp_path: Path, rgb_image: np.ndarray) -> None:
     assert verify_file(str(src), str(out), [REGION], fill=(10, 200, 30)).ok
 
 
-def test_region_outside_image_is_rejected(tmp_path: Path, rgb_image: np.ndarray) -> None:
+def test_region_outside_image_is_rejected(
+    tmp_path: Path, rgb_image: np.ndarray
+) -> None:
     src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
     with pytest.raises(RedactionError):
         redact_file(str(src), str(tmp_path / "out.tif"), [Region(5000, 5000, 10, 10)])
 
 
-def test_refuses_to_overwrite_without_flag(tmp_path: Path, rgb_image: np.ndarray) -> None:
+def test_refuses_to_overwrite_without_flag(
+    tmp_path: Path, rgb_image: np.ndarray
+) -> None:
     from tiffredact.writer import WriterError
 
     src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
@@ -135,8 +159,14 @@ def test_aperio_sample_end_to_end(tmp_path: Path) -> None:
         assert set(slide.associated_images) == {"thumbnail"}
         for level, ds in enumerate(slide.level_downsamples):
             size = (int(2000 / ds), int(1000 / ds))
-            filled = np.asarray(slide.read_region((5500, 4500), level, size).convert("RGB"))
+            filled = np.asarray(
+                slide.read_region((5500, 4500), level, size).convert("RGB")
+            )
             assert filled.max() == 0
-            a = np.asarray(slide.read_region((12000, 12000), level, (200, 200)).convert("RGB"))
-            b = np.asarray(original.read_region((12000, 12000), level, (200, 200)).convert("RGB"))
+            a = np.asarray(
+                slide.read_region((12000, 12000), level, (200, 200)).convert("RGB")
+            )
+            b = np.asarray(
+                original.read_region((12000, 12000), level, (200, 200)).convert("RGB")
+            )
             assert np.array_equal(a, b)

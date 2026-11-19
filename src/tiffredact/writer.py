@@ -77,7 +77,9 @@ class ScratchStore:
 class VirtualSource(io.RawIOBase):
     """Read-only file view: original bytes first, scratch bytes after them."""
 
-    def __init__(self, original_path: str, scratch_path: str, original_size: int) -> None:
+    def __init__(
+        self, original_path: str, scratch_path: str, original_size: int
+    ) -> None:
         super().__init__()
         self._orig = open(original_path, "rb")
         self._scratch = open(scratch_path, "rb")
@@ -193,7 +195,9 @@ def drop_ifds(info: dict[str, Any], offsets: set[int]) -> list[int]:
     return [o for o in before if o in offsets]
 
 
-def write_output(info: dict[str, Any], output_path: str, overwrite: bool = False) -> None:
+def write_output(
+    info: dict[str, Any], output_path: str, overwrite: bool = False
+) -> None:
     if os.path.exists(output_path) and not overwrite:
         raise WriterError(f"Output {output_path} exists; pass overwrite to replace it")
     tifftools.write_tiff(info, output_path, allowExisting=overwrite)

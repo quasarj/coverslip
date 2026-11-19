@@ -49,23 +49,40 @@ def build_parser() -> argparse.ArgumentParser:
     p_redact.add_argument("input")
     p_redact.add_argument("output")
     p_redact.add_argument(
-        "-r", "--region", action="append", required=True, type=parse_region,
-        metavar="X,Y,W,H", help="full-resolution rectangle; repeatable",
+        "-r",
+        "--region",
+        action="append",
+        required=True,
+        type=parse_region,
+        metavar="X,Y,W,H",
+        help="full-resolution rectangle; repeatable",
     )
     p_redact.add_argument("--fill", type=parse_fill, default=(0, 0, 0), metavar="R,G,B")
-    p_redact.add_argument("--drop-label", action="store_true", help="remove label image(s)")
-    p_redact.add_argument("--drop-macro", action="store_true", help="remove macro image(s)")
     p_redact.add_argument(
-        "--no-dct", action="store_true",
+        "--drop-label", action="store_true", help="remove label image(s)"
+    )
+    p_redact.add_argument(
+        "--drop-macro", action="store_true", help="remove macro image(s)"
+    )
+    p_redact.add_argument(
+        "--no-dct",
+        action="store_true",
         help="re-encode JPEG chunks in the pixel domain instead of editing DCT blocks",
     )
-    p_redact.add_argument("--overwrite", action="store_true", help="replace an existing output")
+    p_redact.add_argument(
+        "--overwrite", action="store_true", help="replace an existing output"
+    )
 
     p_verify = sub.add_parser("verify", help="audit a redacted file against its source")
     p_verify.add_argument("input")
     p_verify.add_argument("output")
     p_verify.add_argument(
-        "-r", "--region", action="append", required=True, type=parse_region, metavar="X,Y,W,H"
+        "-r",
+        "--region",
+        action="append",
+        required=True,
+        type=parse_region,
+        metavar="X,Y,W,H",
     )
     p_verify.add_argument("--fill", type=parse_fill, default=(0, 0, 0), metavar="R,G,B")
     return parser

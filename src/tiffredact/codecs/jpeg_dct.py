@@ -89,7 +89,9 @@ def snap_to_mcu(rect: Region, mcu_width: int, mcu_height: int) -> Region:
     return Region(x0, y0, x1 - x0, y1 - y0)
 
 
-def _block_span(start: int, stop: int, comp_factor: int, max_factor: int, limit: int) -> tuple[int, int]:
+def _block_span(
+    start: int, stop: int, comp_factor: int, max_factor: int, limit: int
+) -> tuple[int, int]:
     """Block index range [b0, b1) of one component covering pixels [start, stop)."""
     pixels_per_block = 8 * max_factor / comp_factor
     b0 = math.floor(start / pixels_per_block)
@@ -145,7 +147,9 @@ def redact_jpeg(
     return strip_app0(result)
 
 
-def _paint_jpeg(jpeg: jpeglib.DCTJPEG, rects: list[Region], fill: Rgb, photometric: int) -> None:
+def _paint_jpeg(
+    jpeg: jpeglib.DCTJPEG, rects: list[Region], fill: Rgb, photometric: int
+) -> None:
     ncomp = int(jpeg.num_components)
     if ncomp not in (1, 3):
         raise JpegDctError(f"Unsupported component count {ncomp} for DCT redaction")

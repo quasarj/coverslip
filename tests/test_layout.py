@@ -38,8 +38,16 @@ def test_ome_multi_plane(tmp_path: Path) -> None:
     with tifffile.TiffWriter(path, ome=True) as writer:
         for seed in range(2):
             plane = make_image(200, 260, seed=seed)
-            writer.write(plane, tile=(64, 64), compression="lzw", subifds=1, metadata={"axes": "YXS"})
-            writer.write(plane[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw")
+            writer.write(
+                plane,
+                tile=(64, 64),
+                compression="lzw",
+                subifds=1,
+                metadata={"axes": "YXS"},
+            )
+            writer.write(
+                plane[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw"
+            )
     layout = discover(path)
     assert layout.vendor == "ome"
     assert len(layout.images) == 2
@@ -49,7 +57,9 @@ def test_ome_multi_plane(tmp_path: Path) -> None:
 
 
 def test_stripped_image_has_strip_chunks(tmp_path: Path, rgb_image: np.ndarray) -> None:
-    path = write_pyramid(tmp_path / "strips.tif", rgb_image, levels=1, tile=None, rowsperstrip=32)
+    path = write_pyramid(
+        tmp_path / "strips.tif", rgb_image, levels=1, tile=None, rowsperstrip=32
+    )
     layout = discover(path)
     full = layout.images[0].full
     assert not full.tiled and full.chunk_height == 32 and full.chunk_count == 10
