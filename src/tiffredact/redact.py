@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from tiffredact import layout as layout_mod
@@ -12,6 +13,7 @@ from tiffredact.codecs.dispatch import redact_chunk
 from tiffredact.codecs.fill import Rgb
 from tiffredact.geometry import intersecting_chunks, scale_region
 from tiffredact.model import Chunk, ImageIFD, Layout, Region
+from tiffredact.scrub import ScrubReport, scrub_info
 from tiffredact.writer import (
     Placement,
     ScratchStore,
@@ -54,6 +56,7 @@ class RedactionReport:
     regions: list[Region]
     levels: list[LevelReport] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
+    scrub: ScrubReport | None = None
 
     @property
     def chunks_redacted(self) -> int:
@@ -72,6 +75,9 @@ class RedactionReport:
         for name in self.dropped:
             lines.append(f"  dropped {name}")
         lines.append(f"  total chunks rewritten: {self.chunks_redacted}")
+        if self.scrub is not None:
+            lines.append("  metadata scrub:")
+            lines.append(self.scrub.summary())
         return "\n".join(lines)
 
 
@@ -103,8 +109,6 @@ def _check_supported(ifd: ImageIFD) -> None:
 
 
 def _validate_regions(layout: Layout, regions: list[Region]) -> None:
-    if not regions:
-        raise RedactionError("At least one region is required")
     for image in layout.images:
         full = image.full
         for region in regions:
@@ -131,8 +135,16 @@ def redact_file(
     drop_macro: bool = False,
     use_dct: bool = True,
     overwrite: bool = False,
+    scrub: bool = False,
+    keep_tags: Iterable[int] = (),
 ) -> RedactionReport:
-    """Redact ``regions`` (full-resolution coordinates) into a new file."""
+    """Redact ``regions`` (full-resolution coordinates) into a new file.
+
+    With ``scrub`` the metadata is cleaned as well; ``regions`` may then be
+    empty for a metadata-only rewrite.
+    """
+    if not regions and not scrub:
+        raise RedactionError("At least one region is required unless scrubbing")
     info = layout_mod.read_info(input_path)
     layout = layout_mod.discover(info)
     if (drop_label or drop_macro) and layout.vendor == "ome":
@@ -188,6 +200,8 @@ def redact_file(
             report.dropped.extend(f"macro ifd@{ifd.offset}" for ifd in layout.macro)
         if to_drop:
             drop_ifds(info, to_drop)
+        if scrub:
+            report.scrub = scrub_info(info, layout.vendor, keep_tags)
 
         source = VirtualSource(input_path, scratch.path, original_size)
         try:

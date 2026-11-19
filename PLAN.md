@@ -13,8 +13,7 @@ of the file.
 Coordinates are given on the full-resolution level; the tool maps them to each
 lower-resolution level itself.
 
-Non-goals for now: metadata / tag scrubbing (may come later), NDPI / MRXS /
-DICOM, automatic PHI detection.
+Non-goals for now: NDPI / MRXS / DICOM, automatic PHI detection.
 
 ## Prior art (why we are building this)
 
@@ -144,9 +143,16 @@ tifffile; untouched areas byte/pixel identical):
 | CMU-1-JP2K-33005.svs (133 MB) | Aperio JPEG 2000 | 172 | 1 s |
 | CMU-1.tiff (204 MB) | generic YCbCr JPEG, 9-level IFD chain | 400 | 0.5 s |
 
-Possible follow-ups: metadata scrubbing, `PlanarConfiguration=2`, NDPI,
-an in-place mode that zeroes stale bytes, redacting the macro image by its
-own coordinates.
+7. **Metadata scrubbing** — done (`scrub` command, `redact --scrub`,
+   `verify --scrubbed`, `inspect --tags`): tag allowlist, Aperio description
+   key allowlist, OME-XML element/attribute removal. Verified on both SVS
+   samples (OpenSlide keeps MPP/objective power) and the Leica OME-TIFF
+   (tifffile still parses the OME-XML and pyramid).
+8. **PlanarConfiguration=2** — done (Leica OME-TIFF sample).
+
+Possible follow-ups: NDPI, an in-place mode that zeroes stale bytes,
+redacting the macro image by its own coordinates, dropping OME-TIFF
+secondary images (requires rewriting TiffData indexes in the OME-XML).
 
 ## Verification checklist
 

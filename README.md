@@ -30,6 +30,16 @@ uv run tiffredact redact slide.svs redacted.svs \
 
 # audit the result against the source
 uv run tiffredact verify slide.svs redacted.svs -r 5000,4000,3000,2000 -r 100,100,500,900
+
+# metadata only: strip identifying tags and description fields, keep pixels
+uv run tiffredact scrub slide.svs clean.svs --drop-label --drop-macro
+uv run tiffredact verify slide.svs clean.svs --scrubbed
+
+# both at once
+uv run tiffredact redact slide.svs clean.svs -r 5000,4000,3000,2000 --scrub
+
+# see every tag and what scrubbing would do to it
+uv run tiffredact inspect slide.svs --tags
 ```
 
 Options for `redact`:
@@ -41,10 +51,41 @@ Options for `redact`:
 | `--drop-label` / `--drop-macro` | remove the Aperio label / macro IFDs |
 | `--no-dct` | re-encode JPEG chunks in the pixel domain instead of editing DCT blocks |
 | `--overwrite` | replace an existing output file |
+| `--scrub` | also scrub identifying metadata (see below) |
+| `--keep-tag TAG` | exempt a TIFF tag (number or name) from scrubbing; repeatable |
 
 `verify` exits non-zero if any pixel in the mapped region on any level is not
 the fill colour, if any untouched chunk differs from the source, or if the bytes
-of a replaced source chunk can still be found in the output.
+of a replaced source chunk can still be found in the output. With `--scrubbed`
+it also fails if any non-allowlisted tag or identifying description field is
+still present.
+
+## Metadata scrubbing
+
+`scrub` (or `redact --scrub`) removes identifying metadata while keeping the
+file readable by OpenSlide, Bio-Formats and tifffile:
+
+* **TIFF tags** survive only if they are on a structural allowlist (image
+  geometry, compression, colour, ICC profile, Software, Make/Model). Everything
+  else is removed: DateTime, Artist, HostComputer, DocumentName, XMP, IPTC,
+  EXIF/GPS sub-IFDs, ImageJ metadata, vendor private tags. `--keep-tag`
+  exempts a tag; `inspect --tags` previews the decision for every tag.
+* **Aperio `ImageDescription`**: the header line (dimensions, compression) is
+  kept and `Key = Value` fields are filtered by an allowlist. `AppMag`, `MPP`,
+  `StripeWidth`, stage offsets, exposure and ICC fields stay; `Filename`,
+  `ImageID`, `Date`, `Time`, `Time Zone`, `User`, `ScanScope ID`, `DSR ID`
+  and any unknown key are removed. OpenSlide still reports `mpp` and objective
+  power.
+* **OME-XML**: `Experimenter*`, `AcquisitionDate`, `Description`,
+  `StructuredAnnotations` (vendor "original metadata"), `AnnotationRef`,
+  `Project`/`Dataset`/`Folder`/`Plate`/`Screen`, `ROI`, `SerialNumber` and
+  `LotNumber` attributes and `Image`/`Instrument` names are removed. `Pixels`,
+  `Channel`, `TiffData` and the file UUID stay, so the pyramid and multi-file
+  references remain valid.
+* **Other descriptions** are removed, except tifffile's `{"shape": ...}` JSON.
+
+Scrubbing does not touch pixel data; label and macro images still need
+`--drop-label`/`--drop-macro` (SVS) or pixel redaction.
 
 ## How it works
 
@@ -89,9 +130,9 @@ of a replaced source chunk can still be found in the output.
   coordinate space. They are detected from the OME-XML image names and left
   untouched. `--drop-label`/`--drop-macro` are refused for OME-TIFF because
   the OME-XML references IFDs by index.
-* Not supported yet: sub-byte samples, CMYK/YCCK JPEG, NDPI/MRXS/DICOM,
-  metadata scrubbing. SVS macro images cannot be mapped from slide
-  coordinates; drop them with `--drop-macro`.
+* Not supported yet: sub-byte samples, CMYK/YCCK JPEG, NDPI/MRXS/DICOM. SVS
+  macro images cannot be mapped from slide coordinates; drop them with
+  `--drop-macro`.
 
 ## Verified on
 

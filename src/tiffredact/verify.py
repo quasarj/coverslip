@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Iterable
 import mmap
 import os
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ from tiffredact.codecs import pixel
 from tiffredact.codecs.fill import Rgb, chunk_fill_values
 from tiffredact.geometry import chunk_at, intersecting_chunks, scale_region
 from tiffredact.model import ImageIFD, Layout, Region
+from tiffredact.scrub import scrub_problems
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +94,15 @@ def verify_file(
     output_path: str,
     regions: list[Region],
     fill: Rgb = (0, 0, 0),
+    scrubbed: bool = False,
+    keep_tags: Iterable[int] = (),
 ) -> VerifyReport:
     report = VerifyReport()
     src_layout = layout_mod.discover(layout_mod.read_info(input_path))
-    dst_layout = layout_mod.discover(layout_mod.read_info(output_path))
+    dst_info = layout_mod.read_info(output_path)
+    dst_layout = layout_mod.discover(dst_info)
+    if scrubbed:
+        report.problems.extend(scrub_problems(dst_info, dst_layout.vendor, keep_tags))
     replaced: list[bytes] = []
     untouched_hashes: set[bytes] = set()
     with open(input_path, "rb") as src_fh, open(output_path, "rb") as dst_fh:
