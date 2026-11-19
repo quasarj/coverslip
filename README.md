@@ -134,6 +134,21 @@ Scrubbing does not touch pixel data; label and macro images still need
   macro images cannot be mapped from slide coordinates; drop them with
   `--drop-macro`.
 
+### Reader notes
+
+* Bio-Formats-written OME-TIFFs link each pyramid level both through the
+  `SubIFDs` tag and through the previous level's next-IFD pointer. The output
+  keeps the `SubIFDs` tag only (logged at INFO level); Bio-Formats, tifffile
+  and OpenSlide read the result exactly as they read the source.
+* The ImageJ Bio-Formats importer cannot open any plane with more than
+  2^31 pixels (for example 44961 x 52939) and fails with a
+  `NegativeArraySizeException` in `MinMaxCalculator.openBytes`. This happens
+  on the source file as well; import a lower resolution or use "Crop on
+  import". Bio-Formats itself refuses planes above that size with
+  "ImageWidth x ImageLength > 2147483647 is not supported".
+* OpenSlide's generic TIFF driver ignores `SubIFDs`, so it reports a single
+  level for these OME-TIFFs, before and after redaction.
+
 ## Verified on
 
 | file | structure | chunks rewritten | time |
@@ -143,9 +158,12 @@ Scrubbing does not touch pixel data; label and macro images still need
 | CMU-1-JP2K-33005.svs, 133 MB | Aperio JPEG 2000 | 172 | 1 s |
 | CMU-1.tiff, 204 MB | generic YCbCr 4:2:0 JPEG, 9-level IFD chain | 400 | 0.5 s |
 | Leica-1.ome.tiff, 723 MB | OME BigTIFF, planar JPEG, SubIFD pyramid + macro | 1314 | 2 s |
+| Zeiss Axio Scan OME-TIFF (Bio-Formats 8.5), 3.9 GB | OME BigTIFF, YCbCr JPEG, 9-level SubIFD pyramid | 27 | 1 s |
 
 All outputs pass `tiffredact verify`; untouched areas were also confirmed
-identical with OpenSlide and tifffile.
+identical with OpenSlide and tifffile. The Zeiss output was also read with
+Bio-Formats 8.5 (`showinf`, `bfconvert -crop`) with the same core metadata
+as the source.
 
 ## Tests
 
