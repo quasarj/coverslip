@@ -117,22 +117,36 @@ Label and macro removal: drop those IFDs from the list before writing.
 
 ## Milestones
 
-1. **Scaffold + inspection** — uv project, `inspect` command printing the
-   discovered layout for SVS. *(commit)*
-2. **End-to-end with pixel-domain re-encode** — region mapping, chunk
-   selection, decode/paint/re-encode for every codec incl. JPEG (via
-   imagecodecs with `JPEGTables`), writer, `redact` command. Verify with
-   OpenSlide that the region is black on every level and the thumbnail.
-   *(commit)*
-3. **Lossless DCT path for JPEG** — jpeglib-based block wipe; property test
-   that untouched blocks decode bit-identically to the original. *(commit)*
-4. **Label/macro removal flags**, `verify` command (region all-black on every
-   level, untouched chunk bytes identical, no residue of old tile bytes).
-   *(commit)*
-5. **OME-TIFF and generic pyramidal TIFF** — SubIFD pyramids, multi-plane
-   application, synthetic test fixtures. *(commit)*
-6. **BigTIFF and JPEG 2000 coverage**, performance pass (parallel chunk
-   processing). *(commit)*
+Status as of 2026-11-18:
+
+1. **Scaffold + inspection** — done. `tiffredact inspect` prints the discovered
+   layout for SVS, OME-TIFF and generic pyramids.
+2. **End-to-end with pixel-domain re-encode** — done (`--no-dct` path and all
+   lossless codecs).
+3. **Lossless DCT path for JPEG** — done; default for 8-bit JPEG chunks. Rects
+   are snapped outward to whole MCUs so every component is painted over the
+   same area.
+4. **Label/macro removal flags, `verify` command** — done.
+5. **OME-TIFF and generic pyramidal TIFF** — done for SubIFD pyramids,
+   reduced-IFD chains and multi-plane OME files (synthetic fixtures); a public
+   Leica OME-TIFF sample is used as a real-file check.
+6. **BigTIFF and JPEG 2000** — done (synthetic BigTIFF fixtures; Aperio
+   33005 sample verified with OpenSlide). No parallelism was needed: the
+   1.8 GB sample slide takes ~6 s for ~2400 tiles.
+
+Results on real files (all verified with `tiffredact verify`, OpenSlide and
+tifffile; untouched areas byte/pixel identical):
+
+| file | structure | chunks rewritten | time |
+|---|---|---|---|
+| C3L-00977-22.svs (75 MB) | Aperio JPEG RGB 4:4:4, classic TIFF | 171 | 0.4 s |
+| C3N-04611-21.svs (1.8 GB) | Aperio JPEG RGB 4:4:4, classic TIFF | 2435 | 6 s |
+| CMU-1-JP2K-33005.svs (133 MB) | Aperio JPEG 2000 | 172 | 1 s |
+| CMU-1.tiff (204 MB) | generic YCbCr JPEG, 9-level IFD chain | 400 | 0.5 s |
+
+Possible follow-ups: metadata scrubbing, `PlanarConfiguration=2`, NDPI,
+an in-place mode that zeroes stale bytes, redacting the macro image by its
+own coordinates.
 
 ## Verification checklist
 
@@ -146,10 +160,13 @@ Label and macro removal: drop those IFDs from the list before writing.
 
 ## Risks / open items
 
-* `jpeglib` requires file paths; per-tile temp files are acceptable initially.
-* JPEG tiles whose shared Huffman tables are *optimized* (not standard) may
-  lack symbols needed for the fill blocks; mitigated by always writing full
-  DQT/DHT into redacted tiles.
-* Fill colours other than black need a YCbCr conversion for the DCT path.
+* `jpeglib` requires file paths; per-tile temp files are used and proved fast
+  enough.
+* Redacted JPEG tiles always embed their own DQT/DHT, so optimized shared
+  Huffman tables cannot break them. The JFIF APP0 that libjpeg adds is
+  stripped so the TIFF Photometric tag stays the only colour-space authority.
+* With chroma-subsampled JPEG, decoder chroma upsampling blends a 1-2 px band
+  on either side of the painted border. Luma and all coefficients outside the
+  snapped rectangle are exact.
 * Macro images cannot be mapped from full-res coordinates; they can only be
   dropped (flag) or, later, redacted with their own coordinates.
