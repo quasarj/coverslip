@@ -75,6 +75,20 @@ def quantized_dc(value: int, quant: int) -> int:
     return int(round(target / quant))
 
 
+def snap_to_mcu(rect: Region, mcu_width: int, mcu_height: int) -> Region:
+    """Grow ``rect`` outward to whole minimum coded units.
+
+    Every component must be painted over exactly the same pixel area, and the
+    subsampled chroma planes can only be changed in MCU-sized steps, so the
+    luma plane is grown to match.
+    """
+    x0 = rect.x // mcu_width * mcu_width
+    y0 = rect.y // mcu_height * mcu_height
+    x1 = math.ceil(rect.x1 / mcu_width) * mcu_width
+    y1 = math.ceil(rect.y1 / mcu_height) * mcu_height
+    return Region(x0, y0, x1 - x0, y1 - y0)
+
+
 def _block_span(start: int, stop: int, comp_factor: int, max_factor: int, limit: int) -> tuple[int, int]:
     """Block index range [b0, b1) of one component covering pixels [start, stop)."""
     pixels_per_block = 8 * max_factor / comp_factor
@@ -141,6 +155,7 @@ def _paint_jpeg(jpeg: jpeglib.DCTJPEG, rects: list[Region], fill: Rgb, photometr
     h_max = int(factors[:, 1].max())
     quant_tables = np.asarray(jpeg.qt)
     table_numbers = np.asarray(jpeg.quant_tbl_no).reshape(-1)
+    snapped = [snap_to_mcu(rect, 8 * h_max, 8 * v_max) for rect in rects]
     components = ["Y", "Cb", "Cr"][:ncomp]
     for index, name in enumerate(components):
         coefs = getattr(jpeg, name)
@@ -149,5 +164,5 @@ def _paint_jpeg(jpeg: jpeglib.DCTJPEG, rects: list[Region], fill: Rgb, photometr
         quant = int(quant_tables[int(table_numbers[index])][0, 0])
         dc = quantized_dc(values[index], quant)
         v_factor, h_factor = (int(factors[index, 0]), int(factors[index, 1]))
-        painted = _paint_component(coefs, rects, v_factor, h_factor, v_max, h_max, dc)
+        painted = _paint_component(coefs, snapped, v_factor, h_factor, v_max, h_max, dc)
         setattr(jpeg, name, painted)

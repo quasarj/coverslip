@@ -24,6 +24,8 @@ from tiffredact.model import ImageIFD, Layout, Region
 logger = logging.getLogger(__name__)
 
 RESIDUE_SAMPLE = 64
+LOSSY_INSET = 16
+LOSSY_COMPRESSIONS = {pixel.COMPRESSION_JPEG, *pixel.JPEG2000_COMPRESSIONS, pixel.COMPRESSION_WEBP}
 
 
 @dataclass
@@ -52,8 +54,14 @@ class VerifyReport:
 
 
 def _tolerance(ifd: ImageIFD) -> int:
-    lossy = {pixel.COMPRESSION_JPEG, *pixel.JPEG2000_COMPRESSIONS, pixel.COMPRESSION_WEBP}
-    return 2 if ifd.compression in lossy else 0
+    return 2 if ifd.compression in LOSSY_COMPRESSIONS else 0
+
+
+def _inset(rect: Region, amount: int) -> Region | None:
+    """Shrink a rect on every side; lossy codecs may ring at the painted edge."""
+    if rect.width <= 2 * amount or rect.height <= 2 * amount:
+        return None
+    return Region(rect.x + amount, rect.y + amount, rect.width - 2 * amount, rect.height - 2 * amount)
 
 
 def _match_levels(src: Layout, dst: Layout) -> list[tuple[ImageIFD, ImageIFD, ImageIFD]]:
@@ -133,8 +141,11 @@ def _check_level(
             report.problems.append(f"Chunk {index} of ifd@{d_level.offset} failed to decode: {exc}")
             continue
         scaled = pixel.scale_fill(expected, array.dtype)
+        inset = LOSSY_INSET if d_level.compression in LOSSY_COMPRESSIONS else 0
         for rect in rects:
             clipped = rect.clip(array.shape[1], array.shape[0])
+            if clipped is not None and inset:
+                clipped = _inset(clipped, inset)
             if clipped is None:
                 continue
             window = array[clipped.y : clipped.y1, clipped.x : clipped.x1, :].astype(np.int64)

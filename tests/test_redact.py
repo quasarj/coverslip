@@ -1,0 +1,142 @@
+from pathlib import Path
+
+import numpy as np
+import pytest
+import tifffile
+
+from tiffredact.model import Region
+from tiffredact.redact import RedactionError, redact_file
+from tiffredact.verify import verify_file
+
+from conftest import (
+    make_image,
+    requires_openslide,
+    requires_svs,
+    sample_svs_paths,
+    write_pyramid,
+)
+
+REGION = Region(100, 50, 120, 90)
+
+
+def assert_levels_redacted(
+    output: Path, regions: list[Region], tolerance: int = 0, inset: int = 1
+) -> None:
+    with tifffile.TiffFile(output) as tf:
+        series = tf.series[0]
+        full_w = series.levels[0].shape[1]
+        full_h = series.levels[0].shape[0]
+        for level in series.levels:
+            data = level.asarray()
+            h, w = data.shape[:2]
+            for region in regions:
+                x0 = int(region.x * w / full_w) + inset
+                y0 = int(region.y * h / full_h) + inset
+                x1 = int(region.x1 * w / full_w) - inset
+                y1 = int(region.y1 * h / full_h) - inset
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                assert data[y0:y1, x0:x1].max() <= tolerance, f"level {w}x{h} not filled"
+
+
+@pytest.mark.parametrize("bigtiff", [False, True])
+def test_lzw_subifd_pyramid(tmp_path: Path, rgb_image: np.ndarray, bigtiff: bool) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, predictor=True, bigtiff=bigtiff)
+    out = tmp_path / "out.tif"
+    report = redact_file(str(src), str(out), [REGION])
+    assert report.chunks_redacted > 0
+    assert_levels_redacted(out, [REGION])
+    audit = verify_file(str(src), str(out), [REGION])
+    assert audit.ok, audit.summary()
+    with tifffile.TiffFile(out) as tf:
+        assert tf.is_bigtiff == bigtiff
+        assert len(tf.series[0].levels) == 3
+
+
+def test_jpeg_420_pyramid_dct_and_pixel_paths(tmp_path: Path, jpeg_pyramid: Path) -> None:
+    for use_dct in (True, False):
+        out = tmp_path / f"out_{use_dct}.tif"
+        redact_file(str(jpeg_pyramid), str(out), [REGION], use_dct=use_dct)
+        assert_levels_redacted(out, [REGION], tolerance=2, inset=16)
+        audit = verify_file(str(jpeg_pyramid), str(out), [REGION])
+        assert audit.ok, audit.summary()
+
+
+def test_chain_pyramid_and_multiple_regions(tmp_path: Path, rgb_image: np.ndarray) -> None:
+    src = write_pyramid(tmp_path / "chain.tif", rgb_image, chain=True, compression="zlib")
+    out = tmp_path / "out.tif"
+    regions = [REGION, Region(300, 200, 100, 80)]
+    redact_file(str(src), str(out), regions)
+    assert_levels_redacted(out, regions)
+    assert verify_file(str(src), str(out), regions).ok
+
+
+def test_ome_multi_plane_applies_to_every_plane(tmp_path: Path) -> None:
+    path = tmp_path / "multi.ome.tif"
+    with tifffile.TiffWriter(path, ome=True) as writer:
+        for seed in range(2):
+            plane = make_image(200, 260, seed=seed)
+            writer.write(plane, tile=(64, 64), compression="lzw", subifds=1, metadata={"axes": "YXS"})
+            writer.write(plane[::2, ::2], subfiletype=1, tile=(64, 64), compression="lzw")
+    out = tmp_path / "out.ome.tif"
+    region = Region(70, 70, 60, 60)
+    redact_file(str(path), str(out), [region])
+    with tifffile.TiffFile(path) as src_tf, tifffile.TiffFile(out) as tf:
+        assert tf.ome_metadata == src_tf.ome_metadata
+        for series in tf.series:
+            for level in series.levels:
+                data = level.asarray()
+                scale = 260 / data.shape[1]
+                x0, y0 = int(71 / scale), int(71 / scale)
+                x1, y1 = int(129 / scale), int(129 / scale)
+                assert data[y0:y1, x0:x1].max() == 0
+    assert verify_file(str(path), str(out), [region]).ok
+
+
+def test_fill_colour(tmp_path: Path, rgb_image: np.ndarray) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
+    out = tmp_path / "out.tif"
+    redact_file(str(src), str(out), [REGION], fill=(10, 200, 30))
+    data = tifffile.imread(out)
+    assert (data[REGION.y : REGION.y1, REGION.x : REGION.x1] == (10, 200, 30)).all()
+    assert verify_file(str(src), str(out), [REGION], fill=(10, 200, 30)).ok
+
+
+def test_region_outside_image_is_rejected(tmp_path: Path, rgb_image: np.ndarray) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
+    with pytest.raises(RedactionError):
+        redact_file(str(src), str(tmp_path / "out.tif"), [Region(5000, 5000, 10, 10)])
+
+
+def test_refuses_to_overwrite_without_flag(tmp_path: Path, rgb_image: np.ndarray) -> None:
+    from tiffredact.writer import WriterError
+
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
+    out = tmp_path / "out.tif"
+    redact_file(str(src), str(out), [REGION])
+    with pytest.raises(WriterError):
+        redact_file(str(src), str(out), [REGION])
+    redact_file(str(src), str(out), [REGION], overwrite=True)
+
+
+@requires_svs
+@requires_openslide
+def test_aperio_sample_end_to_end(tmp_path: Path) -> None:
+    import openslide
+
+    src = min(sample_svs_paths(), key=lambda p: Path(p).stat().st_size)
+    out = tmp_path / "out.svs"
+    regions = [Region(5000, 4000, 3000, 2000)]
+    report = redact_file(src, str(out), regions, drop_label=True, drop_macro=True)
+    assert report.chunks_redacted > 0 and len(report.dropped) == 2
+    audit = verify_file(src, str(out), regions)
+    assert audit.ok, audit.summary()
+    with openslide.OpenSlide(str(out)) as slide, openslide.OpenSlide(src) as original:
+        assert set(slide.associated_images) == {"thumbnail"}
+        for level, ds in enumerate(slide.level_downsamples):
+            size = (int(2000 / ds), int(1000 / ds))
+            filled = np.asarray(slide.read_region((5500, 4500), level, size).convert("RGB"))
+            assert filled.max() == 0
+            a = np.asarray(slide.read_region((12000, 12000), level, (200, 200)).convert("RGB"))
+            b = np.asarray(original.read_region((12000, 12000), level, (200, 200)).convert("RGB"))
+            assert np.array_equal(a, b)
