@@ -82,9 +82,29 @@ of a replaced source chunk can still be found in the output.
   chroma upsampling blends a 1-2 px band on either side of the painted border;
   luma is exact.
 * Over-redaction of up to one MCU (15 px) around each rectangle for JPEG.
-* Not supported yet: `PlanarConfiguration=2`, sub-byte samples, CMYK/YCCK
-  JPEG, NDPI/MRXS/DICOM, metadata scrubbing. Macro images cannot be mapped from
-  slide coordinates; drop them with `--drop-macro`.
+* `PlanarConfiguration=2` (separate planes, as written by some OME-TIFF
+  exporters) is supported; each plane's chunks are rewritten with that plane's
+  fill value.
+* OME-TIFF files may carry macro/label/overview images in their own
+  coordinate space. They are detected from the OME-XML image names and left
+  untouched. `--drop-label`/`--drop-macro` are refused for OME-TIFF because
+  the OME-XML references IFDs by index.
+* Not supported yet: sub-byte samples, CMYK/YCCK JPEG, NDPI/MRXS/DICOM,
+  metadata scrubbing. SVS macro images cannot be mapped from slide
+  coordinates; drop them with `--drop-macro`.
+
+## Verified on
+
+| file | structure | chunks rewritten | time |
+|---|---|---|---|
+| Aperio SVS, 75 MB | JPEG RGB 4:4:4, classic TIFF, stripped thumbnail | 171 | 0.4 s |
+| Aperio SVS, 1.8 GB | JPEG RGB 4:4:4, classic TIFF, 4 levels | 2435 | 6 s |
+| CMU-1-JP2K-33005.svs, 133 MB | Aperio JPEG 2000 | 172 | 1 s |
+| CMU-1.tiff, 204 MB | generic YCbCr 4:2:0 JPEG, 9-level IFD chain | 400 | 0.5 s |
+| Leica-1.ome.tiff, 723 MB | OME BigTIFF, planar JPEG, SubIFD pyramid + macro | 1314 | 2 s |
+
+All outputs pass `tiffredact verify`; untouched areas were also confirmed
+identical with OpenSlide and tifffile.
 
 ## Tests
 

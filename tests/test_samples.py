@@ -63,3 +63,29 @@ def test_generic_ycbcr_chain_pyramid(tmp_path: Path) -> None:
     redact_file(src, str(out), [region])
     assert verify_file(src, str(out), [region]).ok
     _openslide_checks(src, out, (12000, 9000), (4000, 3000))
+
+
+@requires_sample("Leica-1.ome.tiff")
+def test_ome_planar_bigtiff_with_macro(tmp_path: Path) -> None:
+    import tifffile
+
+    src = sample_path("Leica-1.ome.tiff")
+    layout = layout_mod.discover(layout_mod.read_info(src))
+    assert layout.vendor == "ome" and layout.bigtiff
+    assert len(layout.images) == 1 and len(layout.images[0].levels) == 5
+    assert layout.images[0].full.planar_config == 2
+    assert [ifd.width for ifd in layout.macro] == [1616, 404, 101]
+    out = tmp_path / "out.ome.tiff"
+    region = Region(15000, 12000, 5000, 4000)
+    redact_file(src, str(out), [region])
+    assert verify_file(src, str(out), [region]).ok
+    with tifffile.TiffFile(src) as a, tifffile.TiffFile(out) as b:
+        assert a.ome_metadata == b.ome_metadata
+        main = [s for s in b.series if 38432 in s.shape][0]
+        for level in main.levels:
+            data = np.moveaxis(level.asarray(), 0, -1)
+            h, w = data.shape[:2]
+            x0, y0 = int(15100 * w / 36832), int(12100 * h / 38432)
+            x1, y1 = int(19900 * w / 36832), int(15900 * h / 38432)
+            if x1 > x0 and y1 > y0:
+                assert data[y0:y1, x0:x1].max() == 0
