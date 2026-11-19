@@ -53,9 +53,11 @@ def test_untouched_blocks_are_bit_exact_and_region_is_black(
     y1 = -(-rect.y1 // mcu_y) * mcu_y
     bleed = 0 if subsampling == "444" else 2
     assert after[y0 + bleed : y1 - bleed, x0 + bleed : x1 - bleed].max() == 0
-    # Everything outside the snapped rectangle is identical to the original decode.
+    # Everything outside the snapped rectangle is identical to the original
+    # decode. The same chroma upsampling blend affects a 2px band just outside
+    # the painted area when chroma is subsampled; coefficients there are untouched.
     mask = np.ones(before.shape[:2], dtype=bool)
-    mask[y0:y1, x0:x1] = False
+    mask[y0 - bleed : y1 + bleed, x0 - bleed : x1 + bleed] = False
     assert np.array_equal(before[mask], after[mask])
 
 
