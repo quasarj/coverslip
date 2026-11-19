@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,37 @@ def test_subifd_pyramid(lzw_pyramid: Path) -> None:
     assert roles == [Role.FULL, Role.LEVEL, Role.LEVEL]
     assert [lvl.width for lvl in layout.images[0].levels] == [420, 210, 105]
     assert not layout.label and not layout.macro and not layout.other
+
+
+def _link_subifds_by_next_pointer(path: Path) -> None:
+    """Rewrite a classic-TIFF SubIFD pyramid so each sub-IFD also points at
+    the next one through its next-IFD field, as Bio-Formats does."""
+    import struct
+
+    import tifffile
+
+    with tifffile.TiffFile(path) as tif:
+        offsets = list(tif.pages[0].subifds)
+    with open(path, "r+b") as handle:
+        for offset, following in zip(offsets, offsets[1:]):
+            handle.seek(offset)
+            count = struct.unpack("<H", handle.read(2))[0]
+            handle.seek(offset + 2 + 12 * count)
+            handle.write(struct.pack("<I", following))
+
+
+def test_double_referenced_subifds_are_explained(
+    tmp_path: Path, rgb_image: np.ndarray, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = write_pyramid(tmp_path / "linked.tif", rgb_image)
+    _link_subifds_by_next_pointer(path)
+    with caplog.at_level(logging.INFO):
+        layout = discover(path)
+    assert [lvl.width for lvl in layout.images[0].levels] == [420, 210, 105]
+    messages = [record.getMessage() for record in caplog.records]
+    assert "SubIFDs are double referenced" not in messages
+    assert any("linked both by the SubIFDs tag" in m for m in messages)
+    assert all(record.levelno < logging.WARNING for record in caplog.records)
 
 
 def test_chain_pyramid(tmp_path: Path, rgb_image: np.ndarray) -> None:

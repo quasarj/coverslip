@@ -49,9 +49,45 @@ class LayoutError(Exception):
     """The file structure is not something we know how to redact."""
 
 
+TIFFTOOLS_DOUBLE_REFERENCE_MESSAGE = "SubIFDs are double referenced"
+
+
+class _ExplainDoubleReferencedSubIFDs(logging.Filter):
+    """Swallow tifftools' terse warning and remember that it fired.
+
+    Bio-Formats (and some other writers) link each reduced-resolution IFD both
+    through the ``SubIFDs`` tag and through the previous sub-IFD's next-IFD
+    pointer. tifftools stops following the pointer when it sees the same IFD
+    is already listed in the tag, so nothing is lost; the output simply links
+    the levels through the tag alone, which every reader we know of accepts.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.count = 0
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.getMessage() == TIFFTOOLS_DOUBLE_REFERENCE_MESSAGE:
+            self.count += 1
+            return False
+        return True
+
+
 def read_info(path: str) -> dict[str, Any]:
     """Read the IFD tree with tifftools and prune SubIFD chains that leak."""
-    info = tifftools.read_tiff(path)
+    tifftools_logger = logging.getLogger("tifftools.tifftools")
+    explain = _ExplainDoubleReferencedSubIFDs()
+    tifftools_logger.addFilter(explain)
+    try:
+        info = tifftools.read_tiff(path)
+    finally:
+        tifftools_logger.removeFilter(explain)
+    if explain.count:
+        logger.info(
+            "%d sub-IFDs are linked both by the SubIFDs tag and by next-IFD "
+            "pointers; the output links them by the SubIFDs tag only",
+            explain.count,
+        )
     prune_leaked_subifd_chains(info)
     return info
 
