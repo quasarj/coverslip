@@ -9,6 +9,7 @@ from tiffredact.codecs.jpeg_dct import (
     redact_jpeg,
     strip_app0,
 )
+from tiffredact.codecs.fill import fill_samples
 from tiffredact.model import Region
 
 from conftest import make_image
@@ -48,7 +49,9 @@ def test_untouched_blocks_are_bit_exact_and_region_is_black(
     original = encode(image, subsampling)
     before = decode(original)
     rect = Region(40, 24, 30, 20)
-    out = redact_jpeg(original, None, [rect], (0, 0, 0), PHOTOMETRIC_YCBCR)
+    out = redact_jpeg(
+        original, None, [rect], fill_samples((0, 0, 0), PHOTOMETRIC_YCBCR, 3)
+    )
     after = decode(out)
     assert after.shape == before.shape
     # Region (snapped outward to MCU bounds) is pure black. With subsampled
@@ -71,7 +74,10 @@ def test_rgb_codestream_fill_uses_rgb_values() -> None:
     image = make_image(64, 64)
     original = encode(image, "444", colorspace="RGB")
     out = redact_jpeg(
-        original, None, [Region(0, 0, 16, 16)], (255, 0, 0), PHOTOMETRIC_RGB
+        original,
+        None,
+        [Region(0, 0, 16, 16)],
+        fill_samples((255, 0, 0), PHOTOMETRIC_RGB, 3),
     )
     after = decode(out, colorspace="RGB")
     block = after[0:16, 0:16].astype(int)
@@ -86,7 +92,10 @@ def test_grayscale() -> None:
     image = make_image(64, 64)[:, :, 0]
     original = encode(image, None)
     out = redact_jpeg(
-        original, None, [Region(8, 8, 8, 8)], (0, 0, 0), PHOTOMETRIC_MINISBLACK
+        original,
+        None,
+        [Region(8, 8, 8, 8)],
+        fill_samples((0, 0, 0), PHOTOMETRIC_MINISBLACK, 1),
     )
     after = decode(out)
     before = decode(original)
@@ -98,7 +107,10 @@ def test_white_fill_saturates() -> None:
     image = make_image(64, 64)
     original = encode(image, "420")
     out = redact_jpeg(
-        original, None, [Region(0, 0, 32, 32)], (255, 255, 255), PHOTOMETRIC_YCBCR
+        original,
+        None,
+        [Region(0, 0, 32, 32)],
+        fill_samples((255, 255, 255), PHOTOMETRIC_YCBCR, 3),
     )
     assert decode(out)[0:30, 0:30].min() == 255
 
@@ -108,7 +120,12 @@ def test_shared_tables_round_trip() -> None:
     image = make_image(64, 64)
     full = encode(image, "444")
     tables, tile = split_tables(full)
-    out = redact_jpeg(tile, tables, [Region(0, 0, 8, 8)], (0, 0, 0), PHOTOMETRIC_YCBCR)
+    out = redact_jpeg(
+        tile,
+        tables,
+        [Region(0, 0, 8, 8)],
+        fill_samples((0, 0, 0), PHOTOMETRIC_YCBCR, 3),
+    )
     # The output is standalone *and* still decodes when readers prepend the tables.
     assert decode(out)[0:8, 0:8].max() == 0
     assert np.array_equal(decode(out), decode(tables[:-2] + out[2:]))

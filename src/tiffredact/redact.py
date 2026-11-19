@@ -95,11 +95,6 @@ def plan_work(layout: Layout, regions: list[Region]) -> dict[int, dict[int, Chun
 
 
 def _check_supported(ifd: ImageIFD) -> None:
-    if ifd.planar_config != 1:
-        raise RedactionError(
-            f"IFD at {ifd.offset} uses separate planes (PlanarConfiguration=2), "
-            "which is not supported yet"
-        )
     if len(ifd.data_offsets) != ifd.chunk_count:
         raise RedactionError(
             f"IFD at {ifd.offset} has {len(ifd.data_offsets)} data chunks but "

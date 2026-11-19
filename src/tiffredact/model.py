@@ -80,6 +80,7 @@ class Chunk:
     y: int
     width: int
     height: int
+    plane: int = 0
 
     @property
     def region(self) -> Region:
@@ -121,8 +122,21 @@ class ImageIFD:
         return math.ceil(self.height / self.chunk_height)
 
     @property
-    def chunk_count(self) -> int:
+    def planes(self) -> int:
+        """Number of separately stored planes (PlanarConfiguration=2)."""
+        return self.samples_per_pixel if self.planar_config == 2 else 1
+
+    @property
+    def samples_per_chunk(self) -> int:
+        return 1 if self.planar_config == 2 else self.samples_per_pixel
+
+    @property
+    def chunks_per_plane(self) -> int:
         return self.chunks_across * self.chunks_down
+
+    @property
+    def chunk_count(self) -> int:
+        return self.chunks_per_plane * self.planes
 
     @property
     def aspect(self) -> float:
@@ -130,9 +144,10 @@ class ImageIFD:
 
     def label(self) -> str:
         kind = "tiled" if self.tiled else "stripped"
+        planar = " planar" if self.planar_config == 2 else ""
         return (
             f"{self.role.value:9s} {self.width}x{self.height} {kind} "
-            f"{self.chunk_width}x{self.chunk_height} comp={self.compression} "
+            f"{self.chunk_width}x{self.chunk_height}{planar} comp={self.compression} "
             f"photometric={self.photometric} chunks={self.chunk_count}"
         )
 

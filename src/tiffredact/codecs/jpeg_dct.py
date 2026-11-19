@@ -15,7 +15,6 @@ import tempfile
 import jpeglib
 import numpy as np
 
-from tiffredact.codecs.fill import Rgb, fill_samples
 from tiffredact.model import Region
 
 SOI = b"\xff\xd8"
@@ -124,10 +123,11 @@ def redact_jpeg(
     chunk: bytes,
     tables: bytes | None,
     rects: list[Region],
-    fill: Rgb,
-    photometric: int,
+    values: list[int],
 ) -> bytes:
-    """Return a standalone JPEG for ``chunk`` with ``rects`` painted ``fill``.
+    """Return a standalone JPEG for ``chunk`` with ``rects`` painted ``values``.
+
+    ``values`` holds one 8-bit sample value per codestream component.
 
     The output embeds its own quantization and Huffman tables. Readers that
     prepend the shared ``JPEGTables`` still decode it, because the tile's own
@@ -140,20 +140,21 @@ def redact_jpeg(
         with open(src, "wb") as fh:
             fh.write(joined)
         jpeg = jpeglib.read_dct(src)
-        _paint_jpeg(jpeg, rects, fill, photometric)
+        _paint_jpeg(jpeg, rects, values)
         jpeg.write_dct(dst)
         with open(dst, "rb") as fh:
             result = fh.read()
     return strip_app0(result)
 
 
-def _paint_jpeg(
-    jpeg: jpeglib.DCTJPEG, rects: list[Region], fill: Rgb, photometric: int
-) -> None:
+def _paint_jpeg(jpeg: jpeglib.DCTJPEG, rects: list[Region], values: list[int]) -> None:
     ncomp = int(jpeg.num_components)
     if ncomp not in (1, 3):
         raise JpegDctError(f"Unsupported component count {ncomp} for DCT redaction")
-    values = fill_samples(fill, photometric, ncomp)
+    if len(values) != ncomp:
+        raise JpegDctError(
+            f"Got {len(values)} fill values for a {ncomp}-component codestream"
+        )
     factors = np.asarray(jpeg.samp_factor).reshape(ncomp, 2)  # rows are (v, h)
     v_max = int(factors[:, 0].max())
     h_max = int(factors[:, 1].max())

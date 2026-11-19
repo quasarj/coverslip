@@ -32,6 +32,20 @@ def rgb_to_ycbcr(rgb: Rgb) -> tuple[int, int, int]:
     return _clamp(y), _clamp(cb), _clamp(cr)
 
 
+def chunk_fill_values(
+    rgb: Rgb, photometric: int, samples_per_pixel: int, planar_config: int, plane: int
+) -> list[int]:
+    """Sample values a single chunk stores for ``rgb``.
+
+    With ``PlanarConfiguration=2`` each chunk holds one plane, so only that
+    plane's value is returned.
+    """
+    values = fill_samples(rgb, photometric, samples_per_pixel)
+    if planar_config == 2:
+        return [values[plane]]
+    return values
+
+
 def fill_samples(rgb: Rgb, photometric: int, samples_per_pixel: int) -> list[int]:
     """Component values (8-bit) that paint ``rgb`` for a given photometric."""
     if samples_per_pixel == 1:

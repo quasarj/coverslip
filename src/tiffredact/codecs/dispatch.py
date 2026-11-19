@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from tiffredact.codecs import jpeg_dct, pixel
-from tiffredact.codecs.fill import Rgb
+from tiffredact.codecs.fill import Rgb, chunk_fill_values
 from tiffredact.model import Chunk, ImageIFD, Region
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,6 @@ def can_use_dct(ifd: ImageIFD) -> bool:
         ifd.compression == pixel.COMPRESSION_JPEG
         and ifd.bits_per_sample == 8
         and ifd.photometric in DCT_PHOTOMETRICS
-        and ifd.planar_config == 1
     )
 
 
@@ -31,6 +30,9 @@ def redact_chunk(
     use_dct: bool = True,
 ) -> bytes:
     """Return replacement bytes for ``chunk`` with ``rects`` filled."""
+    values = chunk_fill_values(
+        fill, ifd.photometric, ifd.samples_per_pixel, ifd.planar_config, chunk.plane
+    )
     if use_dct and can_use_dct(ifd):
-        return jpeg_dct.redact_jpeg(data, ifd.jpegtables, rects, fill, ifd.photometric)
-    return pixel.redact_pixels(ifd, data, chunk, rects, fill)
+        return jpeg_dct.redact_jpeg(data, ifd.jpegtables, rects, values)
+    return pixel.redact_pixels(ifd, data, chunk, rects, values)

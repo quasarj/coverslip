@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from tiffredact.codecs import pixel
+from tiffredact.codecs.fill import fill_samples
 from tiffredact.model import Chunk, ImageIFD, Region, Role
 
 from conftest import make_image
@@ -53,7 +54,9 @@ def test_lossless_round_trip_outside_rect(compression: int, predictor: int) -> N
     chunk = Chunk(0, 0, 0, 64, 48)
     encoded = pixel.encode_chunk(ifd, image)
     assert np.array_equal(pixel.decode_chunk(ifd, encoded, chunk), image)
-    out = pixel.redact_pixels(ifd, encoded, chunk, [Region(10, 10, 20, 20)], (0, 0, 0))
+    out = pixel.redact_pixels(
+        ifd, encoded, chunk, [Region(10, 10, 20, 20)], fill_samples((0, 0, 0), 2, 3)
+    )
     decoded = pixel.decode_chunk(ifd, out, chunk)
     assert decoded[10:30, 10:30].max() == 0
     mask = np.ones((48, 64), dtype=bool)
@@ -67,7 +70,7 @@ def test_sixteen_bit_fill_is_scaled() -> None:
     chunk = Chunk(0, 0, 0, 64, 48)
     encoded = pixel.encode_chunk(ifd, image)
     out = pixel.redact_pixels(
-        ifd, encoded, chunk, [Region(0, 0, 64, 48)], (255, 255, 255)
+        ifd, encoded, chunk, [Region(0, 0, 64, 48)], fill_samples((255, 255, 255), 1, 1)
     )
     assert pixel.decode_chunk(ifd, out, chunk).min() == 65535
 
@@ -77,7 +80,9 @@ def test_jpeg_pixel_path_paints_region() -> None:
     image = make_image(48, 64)
     chunk = Chunk(0, 0, 0, 64, 48)
     encoded = pixel.encode_chunk(ifd, image)
-    out = pixel.redact_pixels(ifd, encoded, chunk, [Region(16, 16, 16, 16)], (0, 0, 0))
+    out = pixel.redact_pixels(
+        ifd, encoded, chunk, [Region(16, 16, 16, 16)], fill_samples((0, 0, 0), 2, 3)
+    )
     assert pixel.decode_chunk(ifd, out, chunk)[16:32, 16:32].max() <= 2
 
 

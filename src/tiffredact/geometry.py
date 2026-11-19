@@ -25,14 +25,19 @@ def scale_region(region: Region, full: ImageIFD, level: ImageIFD) -> Region | No
 
 
 def chunk_at(ifd: ImageIFD, index: int) -> Chunk:
-    """Geometry of chunk ``index`` (row-major for tiles, top-down for strips)."""
-    row, col = divmod(index, ifd.chunks_across)
+    """Geometry of chunk ``index``.
+
+    Chunks are row-major within a plane; with ``PlanarConfiguration=2`` all
+    chunks of plane 0 come first, then plane 1, and so on.
+    """
+    plane, local = divmod(index, ifd.chunks_per_plane)
+    row, col = divmod(local, ifd.chunks_across)
     x = col * ifd.chunk_width
     y = row * ifd.chunk_height
     if ifd.tiled:
-        return Chunk(index, x, y, ifd.chunk_width, ifd.chunk_height)
+        return Chunk(index, x, y, ifd.chunk_width, ifd.chunk_height, plane)
     height = min(ifd.chunk_height, ifd.height - y)
-    return Chunk(index, x, y, ifd.width, height)
+    return Chunk(index, x, y, ifd.width, height, plane)
 
 
 def intersecting_chunks(ifd: ImageIFD, region: Region) -> list[tuple[Chunk, Region]]:
@@ -45,13 +50,15 @@ def intersecting_chunks(ifd: ImageIFD, region: Region) -> list[tuple[Chunk, Regi
     row0 = clipped.y // ifd.chunk_height
     row1 = (clipped.y1 - 1) // ifd.chunk_height
     found: list[tuple[Chunk, Region]] = []
-    for row in range(row0, row1 + 1):
-        for col in range(col0, col1 + 1):
-            chunk = chunk_at(ifd, row * ifd.chunks_across + col)
-            overlap = clipped.intersection(chunk.region)
-            if overlap is None:
-                continue
-            found.append((chunk, overlap.translate(-chunk.x, -chunk.y)))
+    for plane in range(ifd.planes):
+        base = plane * ifd.chunks_per_plane
+        for row in range(row0, row1 + 1):
+            for col in range(col0, col1 + 1):
+                chunk = chunk_at(ifd, base + row * ifd.chunks_across + col)
+                overlap = clipped.intersection(chunk.region)
+                if overlap is None:
+                    continue
+                found.append((chunk, overlap.translate(-chunk.x, -chunk.y)))
     return found
 
 

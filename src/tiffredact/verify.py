@@ -17,7 +17,7 @@ import numpy as np
 
 from tiffredact import layout as layout_mod
 from tiffredact.codecs import pixel
-from tiffredact.codecs.fill import Rgb, fill_samples
+from tiffredact.codecs.fill import Rgb, chunk_fill_values
 from tiffredact.geometry import chunk_at, intersecting_chunks, scale_region
 from tiffredact.model import ImageIFD, Layout, Region
 
@@ -137,7 +137,6 @@ def _check_level(
     ):
         report.problems.append(f"Level geometry differs at ifd@{s_level.offset}")
         return
-    expected = fill_samples(fill, d_level.photometric, d_level.samples_per_pixel)
     tolerance = _tolerance(d_level)
     for index in range(s_level.chunk_count):
         s_bytes = _read(src_fh, s_level, index)
@@ -163,6 +162,13 @@ def _check_level(
                 f"Chunk {index} of ifd@{d_level.offset} failed to decode: {exc}"
             )
             continue
+        expected = chunk_fill_values(
+            fill,
+            d_level.photometric,
+            d_level.samples_per_pixel,
+            d_level.planar_config,
+            chunk.plane,
+        )
         scaled = pixel.scale_fill(expected, array.dtype)
         inset = LOSSY_INSET if d_level.compression in LOSSY_COMPRESSIONS else 0
         for rect in rects:

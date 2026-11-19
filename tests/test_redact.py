@@ -170,3 +170,38 @@ def test_aperio_sample_end_to_end(tmp_path: Path) -> None:
                 original.read_region((12000, 12000), level, (200, 200)).convert("RGB")
             )
             assert np.array_equal(a, b)
+
+
+@pytest.mark.parametrize("compression", ["lzw", "jpeg"])
+def test_planar_separate_pyramid(
+    tmp_path: Path, rgb_image: np.ndarray, compression: str
+) -> None:
+    src = tmp_path / "planar.tif"
+    kwargs = {"compression": compression, "planarconfig": "separate", "tile": (64, 64)}
+    if compression == "jpeg":
+        kwargs["compressionargs"] = {"level": 90}
+    planar = np.ascontiguousarray(np.moveaxis(rgb_image, -1, 0))
+    with tifffile.TiffWriter(src) as writer:
+        writer.write(planar, subifds=1, photometric="rgb", **kwargs)
+        writer.write(
+            np.ascontiguousarray(planar[:, ::2, ::2]),
+            subfiletype=1,
+            photometric="rgb",
+            **kwargs,
+        )
+    out = tmp_path / "out.tif"
+    region = Region(100, 50, 120, 90)
+    report = redact_file(str(src), str(out), [region], fill=(200, 30, 90))
+    assert report.chunks_redacted > 0
+    tolerance = 3 if compression == "jpeg" else 0
+    with tifffile.TiffFile(out) as tf:
+        assert tf.pages[0].planarconfig == 2
+        for level in tf.series[0].levels:
+            data = np.moveaxis(level.asarray(), 0, -1)
+            scale = 420 / data.shape[1]
+            x0, y0 = int(116 / scale), int(66 / scale)
+            x1, y1 = int(204 / scale), int(124 / scale)
+            window = data[y0:y1, x0:x1].astype(int)
+            assert np.abs(window - np.array([200, 30, 90])).max() <= tolerance
+    audit = verify_file(str(src), str(out), [region], fill=(200, 30, 90))
+    assert audit.ok, audit.summary()

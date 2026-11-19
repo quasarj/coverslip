@@ -10,7 +10,7 @@ from __future__ import annotations
 import imagecodecs
 import numpy as np
 
-from tiffredact.codecs.fill import Rgb, fill_samples
+from tiffredact.codecs.fill import Rgb, chunk_fill_values
 from tiffredact.model import Chunk, ImageIFD, Region
 
 COMPRESSION_NONE = 1
@@ -62,6 +62,8 @@ def sample_dtype(ifd: ImageIFD) -> np.dtype:
 
 def _jpeg_colorspace(ifd: ImageIFD) -> str | None:
     """Tell libjpeg what the components are so it does no colour conversion."""
+    if ifd.samples_per_chunk == 1:
+        return "GRAYSCALE"
     return PHOTOMETRIC_NAMES.get(ifd.photometric)
 
 
@@ -76,7 +78,7 @@ def _jpeg_subsampling(ifd: ImageIFD) -> str | None:
 def decode_chunk(ifd: ImageIFD, data: bytes, chunk: Chunk) -> np.ndarray:
     """Decode one tile/strip to an array of shape (height, width, samples)."""
     comp = ifd.compression
-    shape = (chunk.height, chunk.width, ifd.samples_per_pixel)
+    shape = (chunk.height, chunk.width, ifd.samples_per_chunk)
     if comp == COMPRESSION_JPEG:
         array = imagecodecs.jpeg8_decode(
             data,
@@ -92,7 +94,7 @@ def decode_chunk(ifd: ImageIFD, data: bytes, chunk: Chunk) -> np.ndarray:
         return _as_chunk_shape(imagecodecs.webp_decode(data), shape)
     raw = _decode_raw(comp, data)
     array = np.frombuffer(raw, dtype=sample_dtype(ifd))
-    expected = chunk.height * chunk.width * ifd.samples_per_pixel
+    expected = chunk.height * chunk.width * ifd.samples_per_chunk
     if array.size != expected:
         raise UnsupportedCodec(
             f"Decoded {array.size} samples for chunk {chunk.index} but expected {expected}"
@@ -192,11 +194,8 @@ def scale_fill(values: list[int], dtype: np.dtype) -> list[int | float]:
     return [round(v / 255 * top) for v in values]
 
 
-def paint(
-    array: np.ndarray, rects: list[Region], ifd: ImageIFD, fill: Rgb
-) -> np.ndarray:
+def paint(array: np.ndarray, rects: list[Region], values: list[int]) -> np.ndarray:
     """Paint ``rects`` (chunk-local) onto a decoded chunk in place and return it."""
-    values = fill_samples(fill, ifd.photometric, ifd.samples_per_pixel)
     scaled = scale_fill(values, array.dtype)
     for rect in rects:
         clipped = rect.clip(array.shape[1], array.shape[0])
@@ -207,8 +206,8 @@ def paint(
 
 
 def redact_pixels(
-    ifd: ImageIFD, data: bytes, chunk: Chunk, rects: list[Region], fill: Rgb
+    ifd: ImageIFD, data: bytes, chunk: Chunk, rects: list[Region], values: list[int]
 ) -> bytes:
     array = decode_chunk(ifd, data, chunk).copy()
-    paint(array, rects, ifd, fill)
+    paint(array, rects, values)
     return encode_chunk(ifd, array)
