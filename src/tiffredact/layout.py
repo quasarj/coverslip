@@ -53,11 +53,20 @@ def read_info(path: str) -> dict[str, Any]:
     return tifftools.read_tiff(path)
 
 
+def _entry_data(ifd: dict[str, Any], tag: int) -> Any:
+    entry = ifd["tags"][tag]
+    if "data" not in entry:
+        raise LayoutError(
+            f"Tag {tag} of IFD at offset {ifd.get('offset')} has no readable data; "
+            "the file may be truncated"
+        )
+    return entry["data"]
+
+
 def tag_value(ifd: dict[str, Any], tag: int, default: Any = None) -> Any:
-    entry = ifd["tags"].get(tag)
-    if entry is None:
+    if tag not in ifd["tags"]:
         return default
-    data = entry["data"]
+    data = _entry_data(ifd, tag)
     if isinstance(data, (bytes, str)):
         return data
     if len(data) == 1:
@@ -66,18 +75,16 @@ def tag_value(ifd: dict[str, Any], tag: int, default: Any = None) -> Any:
 
 
 def _tag_list(ifd: dict[str, Any], tag: int) -> list[int]:
-    entry = ifd["tags"].get(tag)
-    if entry is None:
+    if tag not in ifd["tags"]:
         return []
-    data = entry["data"]
+    data = _entry_data(ifd, tag)
     return list(data) if isinstance(data, (list, tuple)) else [data]
 
 
 def _tag_bytes(ifd: dict[str, Any], tag: int) -> bytes | None:
-    entry = ifd["tags"].get(tag)
-    if entry is None:
+    if tag not in ifd["tags"]:
         return None
-    data = entry["data"]
+    data = _entry_data(ifd, tag)
     if isinstance(data, str):
         return data.encode("latin-1")
     if isinstance(data, bytes):
