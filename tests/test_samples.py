@@ -20,11 +20,13 @@ def _openslide_checks(
 
     with openslide.OpenSlide(str(out)) as slide, openslide.OpenSlide(src) as original:
         for level, ds in enumerate(slide.level_downsamples):
-            w, h = int(size[0] / ds), int(size[1] / ds)
+            # Stay 32 level-pixels inside the rectangle to avoid MCU/rounding edges.
+            margin = int(32 * ds)
+            w, h = int((size[0] - 2 * margin) / ds), int((size[1] - 2 * margin) / ds)
             if w < 4 or h < 4:
                 continue
             inner = slide.read_region(
-                (origin[0] + 32, origin[1] + 32), level, (w - 1, h - 1)
+                (origin[0] + margin, origin[1] + margin), level, (w, h)
             )
             assert np.asarray(inner.convert("RGB")).max() == 0
             probe = (0, 0)
