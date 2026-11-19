@@ -1,0 +1,16 @@
+# sample slides are large and not part of the repo
+*.svs
+*.tif
+*.tiff
+*.ome.tif
+*.ome.tiff
+
+# python
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
