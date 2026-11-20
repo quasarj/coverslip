@@ -1,0 +1,35 @@
+[project]
+name = "tiffview"
+version = "0.1.0"
+description = "Inspect and view whole-slide TIFF/BigTIFF/SVS/OME-TIFF images, level by level and tile by tile"
+authors = [
+    { name = "Quasar Jarosz", email = "quasar@uams.edu" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "imagecodecs>=2026.11.11",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.5",
+    "tifffile>=2026.11.16",
+    "tifftools>=1.7.0",
+]
+
+[project.scripts]
+tiffview = "tiffview.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "openslide-bin>=4.0.1.2",
+    "openslide-python>=1.4.7",
+    "pytest>=9.2.0",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
