@@ -60,6 +60,56 @@ of a replaced source chunk can still be found in the output. With `--scrubbed`
 it also fails if any non-allowlisted tag or identifying description field is
 still present.
 
+## In-place mode
+
+`--in-place` (also spelled `--inplace`) modifies the input file itself instead
+of writing a new one, touching only the bytes that change. It exists for
+slides where a full rewrite is expensive, such as files behind a range-aware
+network mount.
+
+```sh
+# redact and scrub slide.svs itself; no output argument
+uv run tiffredact redact slide.svs --in-place \
+    -r 5000,4000,3000,2000 --drop-label --drop-macro --scrub
+uv run tiffredact scrub slide.svs --in-place
+
+# audit it; regions, fill and scrub settings come from the manifest
+uv run tiffredact verify slide.svs --in-place
+```
+
+**There is no source left afterwards.** Keep a copy, or storage-level
+versioning, until the audit has passed.
+
+* A manifest is written next to the file before it is modified
+  (`slide.svs.tiffredact-manifest.json`, or `--manifest PATH`). It records the
+  regions and settings, every byte range written or zeroed, and where each
+  replaced chunk used to be. `verify --in-place` needs it. An existing
+  manifest is not replaced without `--overwrite`.
+* A replaced chunk is written over its old bytes when it fits; otherwise it is
+  appended to the end of the file and its old bytes are zeroed. Removed tags,
+  dropped label/macro IFDs with their strips, and the tails of shortened
+  descriptions are zeroed as well, so nothing redacted remains in the file.
+  The file never shrinks: it keeps zero-filled holes and may grow by the
+  appended chunks.
+* Pixels and tags are the same as the full rewrite produces; only the layout
+  of the file differs. Next-IFD links between sub-IFDs are left as they are.
+* `verify --in-place` reads back every written range, checks every zeroed
+  range is zero, checks the old position of each replaced chunk no longer
+  holds its bytes, re-parses the IFDs, decodes the chunks under each region
+  and, if the run scrubbed, checks the metadata. It reads only those ranges,
+  not the whole file.
+* A classic TIFF cannot grow past 4 GB. If appending would cross that, the
+  run stops before writing anything; use the full rewrite, which upgrades to
+  BigTIFF. NDPI is refused, as is scrubbing a file with old-style JPEG tags
+  (`JPEGInterchangeFormat`) or tags of an unknown datatype.
+* Writes are ordered so that an interrupted run leaves a readable file:
+  appended data first, then the pointers to it, zeroing last. Readable is not
+  redacted: until zeroing has finished the old bytes can still be present,
+  and `verify --in-place` with the manifest of that run reports it. There is
+  no resume. Running again does not repair it, because the old bytes are no
+  longer referenced by the file and a new run cannot find them; restore the
+  copy and redact again.
+
 ## Metadata scrubbing
 
 `scrub` (or `redact --scrub`) removes identifying metadata while keeping the

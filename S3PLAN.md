@@ -1,6 +1,21 @@
 # S3PLAN — in-place redaction for S3-resident slides
 
-Status: idea, not started. Written 2026-11-18 after the metadata scrubbing
+Status: patch computation, the local-file backend (`--in-place`), the
+manifest and the range-aware verifier are implemented (2026-11-19) in
+`patches.py`, `inplace.py`, `storage.py`, `manifest.py` and
+`verify.verify_in_place`. Not started: the S3-direct backend and
+`--emit-patch`. An S3 backend implements the `Storage` protocol in
+`storage.py` (`size`, `read`, `apply(PatchSet)`); layout discovery also needs
+a ranged file-like reader passed to `tifftools.read_tiff` in place of a path.
+
+Differences from the design below: appended offsets are fixed at planning
+time (a `Patch` past the source size) rather than resolved at apply time,
+since the pointer arrays need them; zeroing is computed as "everything the
+original IFD tree referenced minus everything the new tree references", which
+also protects deduplicated tiles; a value that grows (not expected for
+descriptions, but possible) is appended like a chunk.
+
+Written 2026-11-18 after the metadata scrubbing
 milestone. The current tool (see `PLAN.md`) is complete and verified; this
 plan describes a second write backend for slides that live in S3 and are
 mounted locally through a range-aware tool, where a full rewrite means a full
