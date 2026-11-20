@@ -6,9 +6,13 @@ import glob
 import os
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pytest
 import tifffile
+
+# tests never open windows
+matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parent.parent
 
