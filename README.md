@@ -154,7 +154,7 @@ missing.
 ## Relationship to tiffredact
 
 tiffview copies its read-side code from
-[tiffredact](../tiffredact):
+[tiffredact](https://github.com/quasarj/tiffredact):
 - `model.py` and `layout.py`, unchanged apart from the package name
 - the decode half of `codecs/pixel.py`
 
