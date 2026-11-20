@@ -184,6 +184,8 @@ def image_from_ifd(ifd: dict[str, Any]) -> ImageIFD:
         offsets = _tag_list(ifd, TAG_STRIP_OFFSETS)
         counts = _tag_list(ifd, TAG_STRIP_BYTE_COUNTS)
     bits = _tag_list(ifd, TAG_BITS_PER_SAMPLE) or [1]
+    # Like BitsPerSample, SampleFormat may carry one value per sample.
+    sample_formats = _tag_list(ifd, TAG_SAMPLE_FORMAT) or [1]
     subsampling_raw = _tag_list(ifd, TAG_YCBCR_SUBSAMPLING)
     subsampling = (
         (int(subsampling_raw[0]), int(subsampling_raw[1]))
@@ -203,7 +205,7 @@ def image_from_ifd(ifd: dict[str, Any]) -> ImageIFD:
         samples_per_pixel=int(tag_value(ifd, TAG_SAMPLES_PER_PIXEL, 1)),
         planar_config=int(tag_value(ifd, TAG_PLANAR_CONFIG, 1)),
         predictor=int(tag_value(ifd, TAG_PREDICTOR, 1)),
-        sample_format=int(tag_value(ifd, TAG_SAMPLE_FORMAT, 1)),
+        sample_format=int(sample_formats[0]),
         subsampling=subsampling,
         jpegtables=_tag_bytes(ifd, TAG_JPEG_TABLES),
         new_subfile_type=int(tag_value(ifd, TAG_NEW_SUBFILE_TYPE, 0)),

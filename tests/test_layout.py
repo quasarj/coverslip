@@ -97,6 +97,20 @@ def test_stripped_image_has_strip_chunks(tmp_path: Path, rgb_image: np.ndarray) 
     assert not full.tiled and full.chunk_height == 32 and full.chunk_count == 10
 
 
+def test_per_sample_sample_format_is_accepted() -> None:
+    ifd = {
+        "offset": 8,
+        "tags": {
+            256: {"data": [64]},
+            257: {"data": [64]},
+            258: {"data": [8, 8, 8]},
+            277: {"data": [3]},
+            339: {"data": [1, 1, 1]},
+        },
+    }
+    assert layout_mod.image_from_ifd(ifd).sample_format == 1
+
+
 @requires_svs
 @pytest.mark.parametrize("path", sample_svs_paths())
 def test_aperio_sample_layout(path: str) -> None:
