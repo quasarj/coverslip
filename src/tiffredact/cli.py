@@ -7,13 +7,49 @@ import logging
 import sys
 from typing import Any
 
+import tifftools
+
 from tiffredact import __version__
 from tiffredact import layout as layout_mod
-from tiffredact.inplace import redact_in_place
+from tiffredact.codecs.fill import UnsupportedFill
+from tiffredact.codecs.jpeg_dct import JpegDctError
+from tiffredact.codecs.pixel import UnsupportedCodec
+from tiffredact.geometry import RegionFrameError
+from tiffredact.inplace import InPlaceError, redact_in_place
+from tiffredact.manifest import ManifestError
 from tiffredact.model import RegionSpec
-from tiffredact.redact import RedactionReport, redact_file
-from tiffredact.scrub import describe_tags, parse_keep_tag
-from tiffredact.verify import verify_file, verify_in_place
+from tiffredact.redact import RedactionError, RedactionReport, redact_file
+from tiffredact.scrub import ScrubError, describe_tags, parse_keep_tag
+from tiffredact.storage import StorageError
+from tiffredact.verify import VerifyError, verify_file, verify_in_place
+from tiffredact.writer import WriterError
+
+logger = logging.getLogger(__name__)
+
+EXIT_ERROR = 2
+"""Exit status for a run that could not be carried out; 1 is a failed audit."""
+
+EXPECTED_ERRORS: tuple[type[Exception], ...] = (
+    InPlaceError,
+    JpegDctError,
+    layout_mod.LayoutError,
+    ManifestError,
+    OSError,
+    RedactionError,
+    RegionFrameError,
+    ScrubError,
+    StorageError,
+    tifftools.TifftoolsError,
+    UnsupportedCodec,
+    UnsupportedFill,
+    VerifyError,
+    WriterError,
+)
+"""Failures caused by the input or the request rather than by a bug.
+
+Anything else (``PatchError`` included: it means the planner broke its own
+invariants) keeps its traceback.
+"""
 
 
 def parse_fill(text: str) -> tuple[int, int, int]:
@@ -265,7 +301,17 @@ def main(argv: list[str] | None = None) -> int:
         "scrub": cmd_scrub,
         "verify": cmd_verify,
     }
-    return handlers[args.command](args)
+    try:
+        return handlers[args.command](args)
+    except EXPECTED_ERRORS as exc:
+        return _report_error(args.command, exc)
+
+
+def _report_error(command: str, exc: Exception) -> int:
+    """Print an expected failure as one line; ``--verbose`` adds the traceback."""
+    logger.debug("%s failed", command, exc_info=exc)
+    print(f"tiffredact {command}: error: {exc}", file=sys.stderr)
+    return EXIT_ERROR
 
 
 if __name__ == "__main__":

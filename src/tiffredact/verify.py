@@ -49,6 +49,10 @@ LOSSY_COMPRESSIONS = {
 }
 
 
+class VerifyError(ValueError):
+    """The two files cannot be compared level by level."""
+
+
 @dataclass
 class VerifyReport:
     problems: list[str] = field(default_factory=list)
@@ -95,10 +99,10 @@ def _match_levels(
 ) -> list[tuple[ImageIFD, ImageIFD, ImageIFD]]:
     pairs = []
     if len(src.images) != len(dst.images):
-        raise ValueError("Source and output have different image counts")
+        raise VerifyError("Source and output have different image counts")
     for s_img, d_img in zip(src.images, dst.images):
         if len(s_img.levels) != len(d_img.levels):
-            raise ValueError("Source and output have different level counts")
+            raise VerifyError("Source and output have different level counts")
         for s_level, d_level in zip(s_img.levels, d_img.levels):
             pairs.append((s_img.full, s_level, d_level))
     return pairs

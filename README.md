@@ -65,7 +65,11 @@ full resolution with outward rounding and then applied to every level, so on
 the other levels it can grow by up to one pixel of the level it was drawn on.
 Reports and in-place manifests record the full-resolution rectangle.
 
-`verify` exits non-zero if any pixel in the mapped region on any level is not
+A run that cannot be carried out (unknown level, unreadable or unsupported
+file, existing output) prints one `tiffredact <command>: error: ...` line and
+exits with status 2; `-v` adds the traceback.
+
+`verify` exits with status 1 if any pixel in the mapped region on any level is not
 the fill colour, if any untouched chunk differs from the source, or if the bytes
 of a replaced source chunk can still be found in the output. With `--scrubbed`
 it also fails if any non-allowlisted tag or identifying description field is
