@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Any, BinaryIO
 
 from tiffredact import layout as layout_mod
 from tiffredact.codecs.dispatch import redact_chunk
@@ -24,6 +25,11 @@ from tiffredact.writer import (
 )
 
 logger = logging.getLogger(__name__)
+
+ReadRange = Callable[[int, int], bytes]
+"""``read(offset, length)`` against the slide being redacted."""
+ChunkSink = Callable[[ImageIFD, int, bytes, bytes], None]
+"""Receives ``(level, chunk index, original bytes, replacement bytes)``."""
 
 
 class RedactionError(Exception):
@@ -57,6 +63,7 @@ class RedactionReport:
     levels: list[LevelReport] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     scrub: ScrubReport | None = None
+    notes: list[str] = field(default_factory=list)
 
     @property
     def chunks_redacted(self) -> int:
@@ -78,6 +85,7 @@ class RedactionReport:
         if self.scrub is not None:
             lines.append("  metadata scrub:")
             lines.append(self.scrub.summary())
+        lines.extend(f"  {note}" for note in self.notes)
         return "\n".join(lines)
 
 
@@ -118,12 +126,102 @@ def _validate_regions(layout: Layout, regions: list[Region]) -> None:
                 )
 
 
-def _read_chunk(fh, ifd: ImageIFD, index: int) -> bytes:
-    fh.seek(ifd.data_offsets[index])
-    data = fh.read(ifd.data_bytecounts[index])
+def _read_chunk(read: ReadRange, ifd: ImageIFD, index: int) -> bytes:
+    data = read(ifd.data_offsets[index], ifd.data_bytecounts[index])
     if len(data) != ifd.data_bytecounts[index]:
         raise RedactionError(f"Short read for chunk {index} of IFD at {ifd.offset}")
     return data
+
+
+def file_reader(fh: BinaryIO) -> ReadRange:
+    def read(offset: int, length: int) -> bytes:
+        fh.seek(offset)
+        return fh.read(length)
+
+    return read
+
+
+def load_plan(
+    input_path: str,
+    regions: list[Region],
+    scrub: bool,
+    drop_label: bool,
+    drop_macro: bool,
+) -> tuple[dict[str, Any], Layout, dict[int, dict[int, ChunkWork]]]:
+    """Read the IFD tree, classify it and map ``regions`` onto chunks."""
+    if not regions and not scrub:
+        raise RedactionError("At least one region is required unless scrubbing")
+    info = layout_mod.read_info(input_path)
+    layout = layout_mod.discover(info)
+    if (drop_label or drop_macro) and layout.vendor == "ome":
+        raise RedactionError(
+            "Dropping label/macro images from OME-TIFF is not supported: the "
+            "OME-XML references IFDs by index and would need rewriting"
+        )
+    _validate_regions(layout, regions)
+    return info, layout, plan_work(layout, regions)
+
+
+def rewrite_chunks(
+    read: ReadRange,
+    layout: Layout,
+    work: dict[int, dict[int, ChunkWork]],
+    fill: Rgb,
+    use_dct: bool,
+    report: RedactionReport,
+    sink: ChunkSink,
+) -> None:
+    """Redact every planned chunk and hand (level, index, old, new) to ``sink``."""
+    for image in layout.images:
+        for level in image.levels:
+            level_report = LevelReport(
+                level.offset,
+                level.role.value,
+                level.width,
+                level.height,
+                level.chunk_count,
+            )
+            report.levels.append(level_report)
+            for index, item in sorted(work.get(level.offset, {}).items()):
+                original = _read_chunk(read, level, index)
+                replacement = redact_chunk(
+                    level, original, item.chunk, item.rects, fill, use_dct
+                )
+                sink(level, index, original, replacement)
+                level_report.chunks_redacted += 1
+                level_report.bytes_in += len(original)
+                level_report.bytes_out += len(replacement)
+            logger.info(
+                "%s %dx%d: %d chunks rewritten",
+                level.role.value,
+                level.width,
+                level.height,
+                level_report.chunks_redacted,
+            )
+
+
+def apply_metadata_changes(
+    info: dict[str, Any],
+    layout: Layout,
+    report: RedactionReport,
+    drop_label: bool,
+    drop_macro: bool,
+    scrub: bool,
+    keep_tags: Iterable[int],
+) -> set[int]:
+    """Drop label/macro IFDs and scrub tags in ``info``; returns dropped offsets."""
+    to_drop: set[int] = set()
+    if drop_label:
+        to_drop.update(ifd.offset for ifd in layout.label)
+        report.dropped.extend(f"label ifd@{ifd.offset}" for ifd in layout.label)
+    if drop_macro:
+        to_drop.update(ifd.offset for ifd in layout.macro)
+        report.dropped.extend(f"macro ifd@{ifd.offset}" for ifd in layout.macro)
+    if to_drop:
+        drop_ifds(info, to_drop)
+    if scrub:
+        report.scrub = scrub_info(info, layout.vendor, keep_tags)
+    return to_drop
 
 
 def redact_file(
@@ -143,17 +241,7 @@ def redact_file(
     With ``scrub`` the metadata is cleaned as well; ``regions`` may then be
     empty for a metadata-only rewrite.
     """
-    if not regions and not scrub:
-        raise RedactionError("At least one region is required unless scrubbing")
-    info = layout_mod.read_info(input_path)
-    layout = layout_mod.discover(info)
-    if (drop_label or drop_macro) and layout.vendor == "ome":
-        raise RedactionError(
-            "Dropping label/macro images from OME-TIFF is not supported: the "
-            "OME-XML references IFDs by index and would need rewriting"
-        )
-    _validate_regions(layout, regions)
-    work = plan_work(layout, regions)
+    info, layout, work = load_plan(input_path, regions, scrub, drop_label, drop_macro)
     report = RedactionReport(input_path, output_path, list(regions))
     original_size = os.path.getsize(input_path)
     replacements: dict[int, dict[int, Placement]] = {}
@@ -161,47 +249,16 @@ def redact_file(
     with ScratchStore(
         base=original_size, directory=os.path.dirname(os.path.abspath(output_path))
     ) as scratch:
-        with open(input_path, "rb") as fh:
-            for image in layout.images:
-                for level in image.levels:
-                    level_report = LevelReport(
-                        level.offset,
-                        level.role.value,
-                        level.width,
-                        level.height,
-                        level.chunk_count,
-                    )
-                    report.levels.append(level_report)
-                    for index, item in sorted(work.get(level.offset, {}).items()):
-                        original = _read_chunk(fh, level, index)
-                        replacement = redact_chunk(
-                            level, original, item.chunk, item.rects, fill, use_dct
-                        )
-                        placement = scratch.add(replacement)
-                        replacements.setdefault(level.offset, {})[index] = placement
-                        level_report.chunks_redacted += 1
-                        level_report.bytes_in += len(original)
-                        level_report.bytes_out += len(replacement)
-                    logger.info(
-                        "%s %dx%d: %d chunks rewritten",
-                        level.role.value,
-                        level.width,
-                        level.height,
-                        level_report.chunks_redacted,
-                    )
-        scratch.flush()
 
-        to_drop: set[int] = set()
-        if drop_label:
-            to_drop.update(ifd.offset for ifd in layout.label)
-            report.dropped.extend(f"label ifd@{ifd.offset}" for ifd in layout.label)
-        if drop_macro:
-            to_drop.update(ifd.offset for ifd in layout.macro)
-            report.dropped.extend(f"macro ifd@{ifd.offset}" for ifd in layout.macro)
-        if to_drop:
-            drop_ifds(info, to_drop)
-        if scrub:
-            report.scrub = scrub_info(info, layout.vendor, keep_tags)
+        def store(level: ImageIFD, index: int, _old: bytes, new: bytes) -> None:
+            replacements.setdefault(level.offset, {})[index] = scratch.add(new)
+
+        with open(input_path, "rb") as fh:
+            rewrite_chunks(file_reader(fh), layout, work, fill, use_dct, report, store)
+        scratch.flush()
+        apply_metadata_changes(
+            info, layout, report, drop_label, drop_macro, scrub, keep_tags
+        )
 
         source = VirtualSource(input_path, scratch.path, original_size)
         try:
