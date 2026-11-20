@@ -5,8 +5,9 @@ Aperio SVS, OME-TIFF) by rewriting **only the tiles that intersect the
 region**. Every other tile is copied byte-for-byte, so the rest of the slide
 takes no generation loss and a multi-gigabyte slide is processed in seconds.
 
-Regions are given in full-resolution pixel coordinates; the tool maps them onto
-every pyramid level and onto the SVS thumbnail itself.
+Regions are given in full-resolution pixel coordinates, or in the pixels of any
+other pyramid level (`X,Y,W,H@WxH`); either way the tool maps them onto every
+pyramid level and onto the SVS thumbnail itself.
 
 ## Install
 
@@ -31,6 +32,9 @@ uv run tiffredact redact slide.svs redacted.svs \
 # audit the result against the source
 uv run tiffredact verify slide.svs redacted.svs -r 5000,4000,3000,2000 -r 100,100,500,900
 
+# a rectangle drawn on the 2875x2055 level (dimensions as printed by inspect)
+uv run tiffredact redact slide.svs redacted.svs -r 310,250,190,125@2875x2055
+
 # metadata only: strip identifying tags and description fields, keep pixels
 uv run tiffredact scrub slide.svs clean.svs --drop-label --drop-macro
 uv run tiffredact verify slide.svs clean.svs --scrubbed
@@ -46,13 +50,20 @@ Options for `redact`:
 
 | flag | meaning |
 |---|---|
-| `-r/--region X,Y,W,H` | rectangle at full resolution; repeatable |
+| `-r/--region X,Y,W,H[@WxH]` | rectangle at full resolution, or on the level that is `WxH` pixels; repeatable |
 | `--fill R,G,B` | fill colour, default black |
 | `--drop-label` / `--drop-macro` | remove the Aperio label / macro IFDs |
 | `--no-dct` | re-encode JPEG chunks in the pixel domain instead of editing DCT blocks |
 | `--overwrite` | replace an existing output file |
 | `--scrub` | also scrub identifying metadata (see below) |
 | `--keep-tag TAG` | exempt a TIFF tag (number or name) from scrubbing; repeatable |
+
+A level is named by its pixel dimensions because those are the same however
+the file lays out its pyramid (main IFD chain or SubIFDs). They must match a
+stored level exactly; anything else is an error. The rectangle is scaled up to
+full resolution with outward rounding and then applied to every level, so on
+the other levels it can grow by up to one pixel of the level it was drawn on.
+Reports and in-place manifests record the full-resolution rectangle.
 
 `verify` exits non-zero if any pixel in the mapped region on any level is not
 the fill colour, if any untouched chunk differs from the source, or if the bytes

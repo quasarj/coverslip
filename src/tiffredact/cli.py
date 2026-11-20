@@ -10,7 +10,7 @@ from typing import Any
 from tiffredact import __version__
 from tiffredact import layout as layout_mod
 from tiffredact.inplace import redact_in_place
-from tiffredact.model import Region
+from tiffredact.model import RegionSpec
 from tiffredact.redact import RedactionReport, redact_file
 from tiffredact.scrub import describe_tags, parse_keep_tag
 from tiffredact.verify import verify_file, verify_in_place
@@ -29,9 +29,9 @@ def parse_fill(text: str) -> tuple[int, int, int]:
     return values  # type: ignore[return-value]
 
 
-def parse_region(text: str) -> Region:
+def parse_region(text: str) -> RegionSpec:
     try:
-        return Region.parse(text)
+        return RegionSpec.parse(text)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
@@ -50,8 +50,10 @@ def _add_region(parser: argparse.ArgumentParser) -> None:
         action="append",
         default=[],
         type=parse_region,
-        metavar="X,Y,W,H",
-        help="full-resolution rectangle; repeatable",
+        metavar="X,Y,W,H[@WxH]",
+        help="rectangle to redact on every level; coordinates are full-resolution "
+        "pixels, or pixels of the WxH pyramid level when @WxH is given "
+        "(inspect lists the levels); repeatable",
     )
 
 
@@ -183,7 +185,7 @@ def _check_destination(args: argparse.Namespace) -> None:
 
 
 def _run_redaction(
-    args: argparse.Namespace, regions: list[Region], scrub: bool, **options: Any
+    args: argparse.Namespace, regions: list[RegionSpec], scrub: bool, **options: Any
 ) -> RedactionReport:
     """Dispatch to the full rewrite or the in-place writer."""
     common = {

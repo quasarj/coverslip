@@ -5,15 +5,15 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
 from tiffredact import layout as layout_mod
 from tiffredact.codecs.dispatch import redact_chunk
 from tiffredact.codecs.fill import Rgb
-from tiffredact.geometry import intersecting_chunks, scale_region
-from tiffredact.model import Chunk, ImageIFD, Layout, Region
+from tiffredact.geometry import intersecting_chunks, resolve_regions, scale_region
+from tiffredact.model import Chunk, ImageIFD, Layout, Region, RegionInput
 from tiffredact.scrub import ScrubReport, scrub_info
 from tiffredact.writer import (
     Placement,
@@ -143,12 +143,16 @@ def file_reader(fh: BinaryIO) -> ReadRange:
 
 def load_plan(
     input_path: str,
-    regions: list[Region],
+    regions: Sequence[RegionInput],
     scrub: bool,
     drop_label: bool,
     drop_macro: bool,
-) -> tuple[dict[str, Any], Layout, dict[int, dict[int, ChunkWork]]]:
-    """Read the IFD tree, classify it and map ``regions`` onto chunks."""
+) -> tuple[dict[str, Any], Layout, list[Region], dict[int, dict[int, ChunkWork]]]:
+    """Read the IFD tree, classify it and map ``regions`` onto chunks.
+
+    Also returns the regions in full-resolution coordinates, which is the form
+    reports and manifests record.
+    """
     if not regions and not scrub:
         raise RedactionError("At least one region is required unless scrubbing")
     info = layout_mod.read_info(input_path)
@@ -158,8 +162,9 @@ def load_plan(
             "Dropping label/macro images from OME-TIFF is not supported: the "
             "OME-XML references IFDs by index and would need rewriting"
         )
-    _validate_regions(layout, regions)
-    return info, layout, plan_work(layout, regions)
+    resolved = resolve_regions(layout, regions)
+    _validate_regions(layout, resolved)
+    return info, layout, resolved, plan_work(layout, resolved)
 
 
 def rewrite_chunks(
@@ -227,7 +232,7 @@ def apply_metadata_changes(
 def redact_file(
     input_path: str,
     output_path: str,
-    regions: list[Region],
+    regions: Sequence[RegionInput],
     fill: Rgb = (0, 0, 0),
     drop_label: bool = False,
     drop_macro: bool = False,
@@ -236,13 +241,18 @@ def redact_file(
     scrub: bool = False,
     keep_tags: Iterable[int] = (),
 ) -> RedactionReport:
-    """Redact ``regions`` (full-resolution coordinates) into a new file.
+    """Redact ``regions`` into a new file.
+
+    A bare :class:`Region` is in full-resolution coordinates; a
+    :class:`RegionSpec` may name the pyramid level it was drawn on.
 
     With ``scrub`` the metadata is cleaned as well; ``regions`` may then be
     empty for a metadata-only rewrite.
     """
-    info, layout, work = load_plan(input_path, regions, scrub, drop_label, drop_macro)
-    report = RedactionReport(input_path, output_path, list(regions))
+    info, layout, resolved, work = load_plan(
+        input_path, regions, scrub, drop_label, drop_macro
+    )
+    report = RedactionReport(input_path, output_path, resolved)
     original_size = os.path.getsize(input_path)
     replacements: dict[int, dict[int, Placement]] = {}
 

@@ -23,7 +23,7 @@ import logging
 import os
 import struct
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,7 +42,7 @@ from tiffredact.manifest import (
     default_manifest_path,
     sha256_hex,
 )
-from tiffredact.model import ImageIFD, Layout, Region
+from tiffredact.model import ImageIFD, Layout, RegionInput
 from tiffredact.patches import Patch, PatchSet, Range, Zero, subtract_ranges
 from tiffredact.redact import (
     ChunkWork,
@@ -458,7 +458,7 @@ def collect_replacements(
 
 def redact_in_place(
     path: str,
-    regions: list[Region],
+    regions: Sequence[RegionInput],
     fill: Rgb = (0, 0, 0),
     drop_label: bool = False,
     drop_macro: bool = False,
@@ -478,9 +478,11 @@ def redact_in_place(
         raise InPlaceError(
             f"Manifest {manifest_path} exists; pass overwrite to replace it"
         )
-    before, layout, work = load_plan(path, regions, scrub, drop_label, drop_macro)
+    before, layout, resolved, work = load_plan(
+        path, regions, scrub, drop_label, drop_macro
+    )
     after = copy.deepcopy(before)
-    report = RedactionReport(path, path, list(regions))
+    report = RedactionReport(path, path, resolved)
     kept_tags = sorted(set(keep_tags))
     with LocalFileStorage(path) as storage:
         replacements = collect_replacements(
@@ -494,7 +496,7 @@ def redact_in_place(
             path=path,
             source_size=patch_set.source_size,
             final_size=patch_set.final_size,
-            regions=list(regions),
+            regions=resolved,
             fill=fill,
             scrubbed=scrub,
             keep_tags=kept_tags,

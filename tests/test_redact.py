@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from tiffredact.model import Region
+from tiffredact.model import Region, RegionSpec
 from tiffredact.redact import RedactionError, redact_file
 from tiffredact.verify import verify_file
 
@@ -120,6 +120,32 @@ def test_fill_colour(tmp_path: Path, rgb_image: np.ndarray) -> None:
     data = tifffile.imread(out)
     assert (data[REGION.y : REGION.y1, REGION.x : REGION.x1] == (10, 200, 30)).all()
     assert verify_file(str(src), str(out), [REGION], fill=(10, 200, 30)).ok
+
+
+@pytest.mark.parametrize("chain", [False, True])
+def test_region_given_on_a_reduced_level(
+    tmp_path: Path, rgb_image: np.ndarray, chain: bool
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, predictor=True, chain=chain)
+    out = tmp_path / "out.tif"
+    spec = RegionSpec(Region(25, 12, 30, 22), (105, 75))
+    report = redact_file(str(src), str(out), [spec])
+    assert report.regions == [Region(100, 48, 120, 88)]
+    assert_levels_redacted(out, report.regions, inset=0)
+    assert verify_file(str(src), str(out), [spec]).ok
+    assert verify_file(str(src), str(out), report.regions).ok
+    untouched = tifffile.imread(out)[:48]
+    assert (untouched == rgb_image[:48]).all()
+
+
+def test_region_on_unknown_level_is_rejected(
+    tmp_path: Path, rgb_image: np.ndarray
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, predictor=True)
+    spec = RegionSpec(Region(25, 12, 30, 22), (105, 76))
+    with pytest.raises(ValueError, match="No pyramid level is 105x76"):
+        redact_file(str(src), str(tmp_path / "out.tif"), [spec])
+    assert not (tmp_path / "out.tif").exists()
 
 
 def test_region_outside_image_is_rejected(

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 import mmap
 import os
 from dataclasses import dataclass, field
@@ -24,10 +24,15 @@ import numpy as np
 from tiffredact import layout as layout_mod
 from tiffredact.codecs import pixel
 from tiffredact.codecs.fill import Rgb, chunk_fill_values
-from tiffredact.geometry import chunk_at, intersecting_chunks, scale_region
+from tiffredact.geometry import (
+    chunk_at,
+    intersecting_chunks,
+    resolve_regions,
+    scale_region,
+)
 from tiffredact.inplace import TiffFormat, chunk_extents, tag_data_extent, walk_ifds
 from tiffredact.manifest import Manifest, default_manifest_path, sha256_hex
-from tiffredact.model import ImageIFD, Layout, Region
+from tiffredact.model import ImageIFD, Layout, Region, RegionInput
 from tiffredact.patches import merge_ranges, ranges_intersect
 from tiffredact.scrub import scrub_problems
 from tiffredact.storage import LocalFileStorage, Storage
@@ -102,13 +107,14 @@ def _match_levels(
 def verify_file(
     input_path: str,
     output_path: str,
-    regions: list[Region],
+    regions: Sequence[RegionInput],
     fill: Rgb = (0, 0, 0),
     scrubbed: bool = False,
     keep_tags: Iterable[int] = (),
 ) -> VerifyReport:
     report = VerifyReport()
     src_layout = layout_mod.discover(layout_mod.read_info(input_path))
+    full_regions = resolve_regions(src_layout, regions)
     dst_info = layout_mod.read_info(output_path)
     dst_layout = layout_mod.discover(dst_info)
     if scrubbed:
@@ -117,7 +123,7 @@ def verify_file(
     untouched_hashes: set[bytes] = set()
     with open(input_path, "rb") as src_fh, open(output_path, "rb") as dst_fh:
         for full, s_level, d_level in _match_levels(src_layout, dst_layout):
-            touched = _touched_chunks(regions, full, s_level)
+            touched = _touched_chunks(full_regions, full, s_level)
             _check_level(
                 src_fh,
                 dst_fh,

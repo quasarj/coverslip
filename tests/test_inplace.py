@@ -394,6 +394,21 @@ def test_cli_in_place_round_trip(
     assert_matches_full_rewrite(src, target, regions=[REGION], scrub=True)
 
 
+def test_cli_region_on_a_reduced_level(tmp_path: Path, rgb_image: np.ndarray) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image, predictor=True)
+    target = in_place_copy(src)
+    region = ["-r", "25,12,30,22@105x75"]
+    assert main(["redact", str(target), "--in-place", *region]) == 0
+    assert Manifest.load(default_manifest_path(str(target))).regions == [
+        Region(100, 48, 120, 88)
+    ]
+    assert main(["verify", str(target), "--in-place"]) == 0
+    out = tmp_path / "out.tif"
+    assert main(["redact", str(src), str(out), *region]) == 0
+    assert main(["verify", str(src), str(out), *region]) == 0
+    assert_matches_full_rewrite(src, target, regions=[Region(100, 48, 120, 88)])
+
+
 def test_cli_rejects_conflicting_destinations(tmp_path: Path) -> None:
     src = write_pyramid(tmp_path / "src.tif", make_image(100, 100), levels=1)
     region = ["-r", "1,1,10,10"]

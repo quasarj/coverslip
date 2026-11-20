@@ -67,6 +67,46 @@ class Region:
         return cls(x, y, w, h)
 
 
+def parse_frame(text: str) -> tuple[int, int]:
+    """Parse ``"WIDTHxHEIGHT"``, the pixel dimensions of a pyramid level."""
+    parts = text.replace(" ", "").lower().split("x")
+    if len(parts) != 2:
+        raise ValueError(f"Expected WIDTHxHEIGHT but got {text!r}")
+    try:
+        width, height = (int(p) for p in parts)
+    except ValueError as exc:
+        raise ValueError(f"Level dimensions must be integers: {text!r}") from exc
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Level dimensions must be positive: {text!r}")
+    return width, height
+
+
+@dataclass(frozen=True)
+class RegionSpec:
+    """A region together with the pixel grid its coordinates refer to.
+
+    ``frame`` is the ``(width, height)`` of a stored pyramid level. Dimensions
+    identify a level the same way whether the file keeps its levels in the
+    main IFD chain or in SubIFDs. ``None`` means the full-resolution image.
+    """
+
+    region: Region
+    frame: tuple[int, int] | None = None
+
+    @classmethod
+    def parse(cls, text: str) -> RegionSpec:
+        """Parse ``"x,y,width,height"`` with an optional ``"@WIDTHxHEIGHT"``."""
+        rectangle, separator, frame = text.partition("@")
+        region = Region.parse(rectangle)
+        if not separator:
+            return cls(region)
+        return cls(region, parse_frame(frame))
+
+
+RegionInput = Region | RegionSpec
+"""A bare :class:`Region` is in full-resolution coordinates."""
+
+
 @dataclass(frozen=True)
 class Chunk:
     """One tile or strip of an IFD, with its nominal geometry in level pixels.

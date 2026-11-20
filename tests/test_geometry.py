@@ -1,10 +1,23 @@
+import pytest
+
 from tiffredact.geometry import (
+    RegionFrameError,
     chunk_at,
     covers_chunk,
     intersecting_chunks,
+    region_to_full,
+    resolve_region,
     scale_region,
 )
-from tiffredact.model import Chunk, ImageIFD, Region, Role
+from tiffredact.model import (
+    Chunk,
+    ImageIFD,
+    Layout,
+    PyramidImage,
+    Region,
+    RegionSpec,
+    Role,
+)
 
 
 def make_ifd(width: int, height: int, tiled: bool, cw: int, ch: int) -> ImageIFD:
@@ -82,3 +95,45 @@ def test_covers_chunk() -> None:
     chunk = Chunk(0, 0, 0, 64, 64)
     assert covers_chunk([Region(-5, -5, 100, 100)], chunk)
     assert not covers_chunk([Region(0, 0, 63, 64)], chunk)
+
+
+def make_layout() -> Layout:
+    full = make_ifd(21911, 18129, True, 240, 240)
+    level = make_ifd(5477, 4532, True, 240, 240)
+    return Layout("slide.svs", False, "generic", [PyramidImage([full, level])])
+
+
+def test_region_to_full_round_trip_covers_the_level_region() -> None:
+    layout = make_layout()
+    full, level = layout.images[0].levels
+    drawn = Region(1201, 977, 333, 211)
+    back = scale_region(region_to_full(drawn, level, full), full, level)
+    assert back is not None
+    assert back.intersection(drawn) == drawn
+
+
+def test_region_to_full_is_exact_for_integer_downsample() -> None:
+    full = make_ifd(4000, 2000, True, 240, 240)
+    level = make_ifd(1000, 500, True, 240, 240)
+    assert region_to_full(Region(10, 20, 30, 40), level, full) == Region(
+        40, 80, 120, 160
+    )
+
+
+def test_resolve_region_leaves_full_resolution_input_alone() -> None:
+    layout = make_layout()
+    region = Region(5, 6, 7, 8)
+    assert resolve_region(layout, region) == region
+    assert resolve_region(layout, RegionSpec(region)) == region
+    assert resolve_region(layout, RegionSpec(region, (21911, 18129))) == region
+
+
+def test_resolve_region_requires_an_exact_level_match() -> None:
+    with pytest.raises(RegionFrameError, match="21911x18129, 5477x4532"):
+        resolve_region(make_layout(), RegionSpec(Region(0, 0, 10, 10), (5477, 4533)))
+
+
+def test_resolve_region_rejects_region_outside_its_level() -> None:
+    spec = RegionSpec(Region(6000, 0, 10, 10), (5477, 4532))
+    with pytest.raises(RegionFrameError, match="outside"):
+        resolve_region(make_layout(), spec)
