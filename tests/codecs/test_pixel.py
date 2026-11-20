@@ -90,3 +90,17 @@ def test_unknown_compression_raises() -> None:
     ifd = make_ifd(99)
     with pytest.raises(pixel.UnsupportedCodec):
         pixel.decode_chunk(ifd, b"", Chunk(0, 0, 0, 64, 48))
+
+
+def test_ycbcr_jpeg_to_rgb() -> None:
+    ifd = make_ifd(pixel.COMPRESSION_JPEG)
+    ifd.photometric = 6
+    image = make_image(48, 64)
+    encoded = imagecodecs.jpeg8_encode(
+        image, level=95, colorspace="RGB", outcolorspace="YCBCR"
+    )
+    chunk = Chunk(0, 0, 0, 64, 48)
+    rgb = pixel.decode_chunk(ifd, encoded, chunk, to_rgb=True)
+    assert np.abs(rgb.astype(int) - image.astype(int)).mean() < 8
+    stored = pixel.decode_chunk(ifd, encoded, chunk)
+    assert np.abs(stored.astype(int) - image.astype(int)).mean() > 20

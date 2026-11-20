@@ -131,3 +131,9 @@ def has_openslide() -> bool:
 requires_openslide = pytest.mark.skipif(
     not has_openslide(), reason="openslide not available"
 )
+
+
+def load_layout(path: Path):
+    from tiffview import layout as layout_mod
+
+    return layout_mod.discover(layout_mod.read_info(str(path)))

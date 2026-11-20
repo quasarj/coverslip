@@ -16,3 +16,6 @@ build/
 .pytest_cache/
 .ruff_cache/
 out/
+
+# symlink to sample slides (see tests/conftest.py)
+samples
