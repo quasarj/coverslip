@@ -5,13 +5,15 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from typing import Any
 
 from tiffredact import __version__
 from tiffredact import layout as layout_mod
+from tiffredact.inplace import redact_in_place
 from tiffredact.model import Region
-from tiffredact.redact import redact_file
+from tiffredact.redact import RedactionReport, redact_file
 from tiffredact.scrub import describe_tags, parse_keep_tag
-from tiffredact.verify import verify_file
+from tiffredact.verify import verify_file, verify_in_place
 
 
 def parse_fill(text: str) -> tuple[int, int, int]:
@@ -82,7 +84,20 @@ def _add_drop_flags(parser: argparse.ArgumentParser) -> None:
         "--drop-macro", action="store_true", help="remove macro image(s)"
     )
     parser.add_argument(
-        "--overwrite", action="store_true", help="replace an existing output file"
+        "--overwrite",
+        action="store_true",
+        help="replace an existing output file (or, in place, an existing manifest)",
+    )
+
+
+def _add_in_place(parser: argparse.ArgumentParser, help_text: str) -> None:
+    parser.add_argument(
+        "--in-place", "--inplace", dest="in_place", action="store_true", help=help_text
+    )
+    parser.add_argument(
+        "--manifest",
+        metavar="PATH",
+        help="in-place manifest (default: <input>.tiffredact-manifest.json)",
     )
 
 
@@ -104,7 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_redact = sub.add_parser("redact", help="redact regions into a new file")
     p_redact.add_argument("input")
-    p_redact.add_argument("output")
+    p_redact.add_argument("output", nargs="?")
+    _add_in_place(p_redact, "modify INPUT itself, writing only the changed bytes")
     _add_region(p_redact)
     _add_fill(p_redact)
     _add_drop_flags(p_redact)
@@ -122,13 +138,19 @@ def build_parser() -> argparse.ArgumentParser:
         "scrub", help="scrub identifying metadata without touching pixels"
     )
     p_scrub.add_argument("input")
-    p_scrub.add_argument("output")
+    p_scrub.add_argument("output", nargs="?")
+    _add_in_place(p_scrub, "modify INPUT itself, writing only the changed bytes")
     _add_drop_flags(p_scrub)
     _add_keep_tag(p_scrub)
 
     p_verify = sub.add_parser("verify", help="audit a redacted file against its source")
     p_verify.add_argument("input")
-    p_verify.add_argument("output")
+    p_verify.add_argument("output", nargs="?")
+    _add_in_place(
+        p_verify,
+        "audit INPUT, which was redacted in place, from its manifest "
+        "(regions, fill and scrub settings are read from the manifest)",
+    )
     _add_region(p_verify)
     _add_fill(p_verify)
     p_verify.add_argument(
@@ -150,41 +172,72 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _check_destination(args: argparse.Namespace) -> None:
+    """Exactly one of OUTPUT and --in-place says where the result goes."""
+    if args.in_place and args.output is not None:
+        raise SystemExit(f"{args.command}: give either OUTPUT or --in-place, not both")
+    if not args.in_place and args.output is None:
+        raise SystemExit(f"{args.command}: OUTPUT is required unless --in-place")
+    if args.manifest and not args.in_place:
+        raise SystemExit(f"{args.command}: --manifest only applies with --in-place")
+
+
+def _run_redaction(
+    args: argparse.Namespace, regions: list[Region], scrub: bool, **options: Any
+) -> RedactionReport:
+    """Dispatch to the full rewrite or the in-place writer."""
+    common = {
+        "drop_label": args.drop_label,
+        "drop_macro": args.drop_macro,
+        "scrub": scrub,
+        "keep_tags": args.keep_tag,
+        **options,
+    }
+    if args.in_place:
+        return redact_in_place(
+            args.input,
+            regions,
+            manifest_path=args.manifest,
+            overwrite_manifest=args.overwrite,
+            **common,
+        )
+    return redact_file(
+        args.input, args.output, regions, overwrite=args.overwrite, **common
+    )
+
+
 def cmd_redact(args: argparse.Namespace) -> int:
+    _check_destination(args)
     if not args.region and not args.scrub:
         raise SystemExit("redact: at least one --region is required (or use --scrub)")
-    report = redact_file(
-        args.input,
-        args.output,
-        args.region,
-        fill=args.fill,
-        drop_label=args.drop_label,
-        drop_macro=args.drop_macro,
-        use_dct=not args.no_dct,
-        overwrite=args.overwrite,
-        scrub=args.scrub,
-        keep_tags=args.keep_tag,
+    report = _run_redaction(
+        args, args.region, args.scrub, fill=args.fill, use_dct=not args.no_dct
     )
     print(report.summary())
     return 0
 
 
 def cmd_scrub(args: argparse.Namespace) -> int:
-    report = redact_file(
-        args.input,
-        args.output,
-        [],
-        drop_label=args.drop_label,
-        drop_macro=args.drop_macro,
-        overwrite=args.overwrite,
-        scrub=True,
-        keep_tags=args.keep_tag,
-    )
+    _check_destination(args)
+    report = _run_redaction(args, [], True)
     print(report.summary())
     return 0
 
 
+def cmd_verify_in_place(args: argparse.Namespace) -> int:
+    if args.region or args.scrubbed or args.keep_tag:
+        raise SystemExit(
+            "verify: --in-place reads regions and scrub settings from the manifest"
+        )
+    report = verify_in_place(args.input, args.manifest)
+    print(report.summary())
+    return 0 if report.ok else 1
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
+    _check_destination(args)
+    if args.in_place:
+        return cmd_verify_in_place(args)
     report = verify_file(
         args.input,
         args.output,
