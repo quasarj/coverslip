@@ -5,6 +5,9 @@
 *.ome.tif
 *.ome.tiff
 
+# in-place redaction manifests written next to the slides
+*.tiffredact-manifest.json
+
 # python
 __pycache__/
 *.pyc
