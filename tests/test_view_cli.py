@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -163,3 +165,23 @@ def test_default_level_falls_back_to_thumbnail(
     monkeypatch.setattr(view_cli.chunks, "DEFAULT_MAX_PIXELS", 2000 * 2000)
     layout = view_cli.load(str(path), verbose=False)
     assert view_cli.default_view_level(layout.images[0]) == 1
+
+
+def test_cli_import_does_not_need_matplotlib() -> None:
+    code = "import sys; import coverslip.cli; " "sys.exit('matplotlib' in sys.modules)"
+    assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+
+def test_view_without_matplotlib_is_a_one_line_error(
+    lzw_pyramid: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for name in list(sys.modules):
+        if name == "matplotlib" or name.startswith("matplotlib."):
+            monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.delitem(sys.modules, "coverslip.viewer")
+    assert main(["show", str(lzw_pyramid)]) == EXIT_ERROR
+    assert error_line(capsys) == (
+        "coverslip show: error: viewing needs matplotlib; install coverslip[view]"
+    )

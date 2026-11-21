@@ -75,14 +75,19 @@ source = { editable = "." }
 dependencies = [
     { name = "imagecodecs" },
     { name = "jpeglib" },
-    { name = "matplotlib" },
     { name = "numpy" },
     { name = "tifffile" },
     { name = "tifftools" },
 ]
 
+[package.optional-dependencies]
+view = [
+    { name = "matplotlib" },
+]
+
 [package.dev-dependencies]
 dev = [
+    { name = "coverslip", extra = ["view"] },
     { name = "openslide-bin" },
     { name = "openslide-python" },
     { name = "pytest" },
@@ -92,14 +97,16 @@ dev = [
 requires-dist = [
     { name = "imagecodecs", specifier = ">=2026.11.11" },
     { name = "jpeglib", specifier = ">=1.0.2" },
-    { name = "matplotlib", specifier = ">=3.11.2" },
+    { name = "matplotlib", marker = "extra == 'view'", specifier = ">=3.11.2" },
     { name = "numpy", specifier = ">=2.5.5" },
     { name = "tifffile", specifier = ">=2026.11.16" },
     { name = "tifftools", specifier = ">=1.7.0" },
 ]
+provides-extras = ["view"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "coverslip", extras = ["view"] },
     { name = "openslide-bin", specifier = ">=4.0.1.2" },
     { name = "openslide-python", specifier = ">=1.4.7" },
     { name = "pytest", specifier = ">=9.2.0" },

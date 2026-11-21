@@ -1,12 +1,19 @@
-"""The viewing commands: show, tile and grid."""
+"""The viewing commands: show, tile and grid.
+
+The viewer needs matplotlib, an optional dependency (``coverslip[view]``), so
+it is imported only when one of these commands runs; redaction stays usable
+on a headless install.
+"""
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import logging
 from pathlib import Path
+from types import ModuleType
 
-from coverslip import chunks, gridmap, viewer
+from coverslip import chunks, gridmap
 from coverslip import layout as layout_mod
 from coverslip.model import ImageIFD, Layout, PyramidImage, Role
 
@@ -18,11 +25,16 @@ class SelectionError(Exception):
     """The requested level, image or tile does not exist in this file."""
 
 
+class ViewerUnavailableError(Exception):
+    """matplotlib is not installed."""
+
+
 VIEW_ERRORS: tuple[type[Exception], ...] = (
     chunks.EmptyChunkError,
     chunks.LevelTooLargeError,
     chunks.TileIndexError,
     SelectionError,
+    ViewerUnavailableError,
 )
 """Expected failures of the viewing commands, on top of the main CLI's."""
 
@@ -94,6 +106,18 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p_grid.add_argument("path")
     p_grid.add_argument("--level", type=int, default=0, metavar="N")
     _add_image(p_grid)
+
+
+def load_viewer() -> ModuleType:
+    """Import :mod:`coverslip.viewer`, explaining a missing matplotlib."""
+    try:
+        return importlib.import_module("coverslip.viewer")
+    except ModuleNotFoundError as exc:
+        if (exc.name or "").split(".")[0] != "matplotlib":
+            raise
+        raise ViewerUnavailableError(
+            "viewing needs matplotlib; install coverslip[view]"
+        ) from exc
 
 
 def load(path: str, verbose: bool) -> Layout:
@@ -184,6 +208,7 @@ def window_title(path: str, what: str, ifd: ImageIFD) -> str:
 
 
 def _show_associated(args: argparse.Namespace, layout: Layout, role: Role) -> None:
+    viewer = load_viewer()
     ifd = select_associated(layout, role)
     max_pixels = None if args.force else chunks.DEFAULT_MAX_PIXELS
     array = chunks.read_level(args.path, ifd, max_pixels)
@@ -191,6 +216,7 @@ def _show_associated(args: argparse.Namespace, layout: Layout, role: Role) -> No
 
 
 def _show_level(args: argparse.Namespace, layout: Layout) -> None:
+    viewer = load_viewer()
     image = select_image(layout, args.image)
     n = args.level if args.level is not None else default_view_level(image)
     view = select_level(image, n)
@@ -212,6 +238,7 @@ def _show_level(args: argparse.Namespace, layout: Layout) -> None:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
+    viewer = load_viewer()
     layout = load(args.path, args.verbose)
     viewer.configure_matplotlib()
     if args.label:
@@ -227,6 +254,7 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_tile(args: argparse.Namespace) -> int:
+    viewer = load_viewer()
     layout = load(args.path, args.verbose)
     ifd = select_level(select_image(layout, args.image), args.level)
     col, row = tile_from_args(args, ifd)
@@ -240,6 +268,7 @@ def cmd_tile(args: argparse.Namespace) -> int:
 
 
 def cmd_grid(args: argparse.Namespace) -> int:
+    viewer = load_viewer()
     layout = load(args.path, args.verbose)
     ifd = select_level(select_image(layout, args.image), args.level)
     title = (
