@@ -9,7 +9,7 @@ from typing import Any
 
 import tifftools
 
-from coverslip import __version__, view_cli
+from coverslip import __version__, info, view_cli
 from coverslip import layout as layout_mod
 from coverslip.codecs.fill import UnsupportedFill
 from coverslip.codecs.jpeg_dct import JpegDctError
@@ -204,12 +204,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
-    info = layout_mod.read_info(args.path)
-    layout = layout_mod.discover(info)
-    print(layout_mod.describe(layout))
+    raw = layout_mod.read_info(args.path)
+    layout = layout_mod.discover(raw)
+    print(info.format_report(layout))
     if args.tags:
         print()
-        print(describe_tags(info))
+        print(describe_tags(raw))
     return 0
 
 

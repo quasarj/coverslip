@@ -390,25 +390,3 @@ def _separate_secondary_images(
             level.role = role
             group.append(level)
     layout.images = kept
-
-
-def describe(layout: Layout) -> str:
-    lines = [
-        f"{layout.path}",
-        f"format: {'BigTIFF' if layout.bigtiff else 'classic TIFF'}  vendor: {layout.vendor}",
-    ]
-    for n, image in enumerate(layout.images):
-        lines.append(f"image {n}:")
-        for level in image.levels:
-            scale = image.full.width / level.width
-            lines.append(
-                f"  ifd@{level.offset:<12d} {level.label()} downsample={scale:.4f}"
-            )
-    for name, group in (
-        ("label", layout.label),
-        ("macro", layout.macro),
-        ("other", layout.other),
-    ):
-        for ifd in group:
-            lines.append(f"{name}: ifd@{ifd.offset:<12d} {ifd.label()}")
-    return "\n".join(lines)

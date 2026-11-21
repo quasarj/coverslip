@@ -1,18 +1,13 @@
-"""Text report: pyramid levels, associated images and, optionally, every tag."""
+"""Text report of a slide: its pyramid levels and associated images."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from tifftools import constants
 
 from coverslip.chunks import is_empty
-from coverslip.layout import iter_all_ifds
 from coverslip.model import ImageIFD, Layout
-
-MAX_TAG_VALUES = 8
-MAX_TAG_TEXT = 72
 
 
 @dataclass(frozen=True)
@@ -36,6 +31,7 @@ class LevelSummary:
     bits: int
     downsample: float | None
     stored_bytes: int
+    offset: int
 
 
 def compression_name(code: int) -> str:
@@ -67,6 +63,7 @@ def summarize(name: str, ifd: ImageIFD, full: ImageIFD | None) -> LevelSummary:
         bits=ifd.bits_per_sample,
         downsample=full.width / ifd.width if full is not None else None,
         stored_bytes=sum(ifd.data_bytecounts),
+        offset=ifd.offset,
     )
 
 
@@ -111,6 +108,7 @@ def _row_cells(row: LevelSummary) -> list[str]:
         f"{row.samples}x{row.bits}",
         f"{row.downsample:.3f}" if row.downsample is not None else "-",
         human_bytes(row.stored_bytes),
+        f"@{row.offset}",
     ]
 
 
@@ -126,6 +124,7 @@ HEADER = [
     "spp x bits",
     "downsample",
     "stored",
+    "ifd",
 ]
 
 
@@ -146,43 +145,3 @@ def format_report(layout: Layout) -> str:
             format_table(rows),
         ]
     )
-
-
-def format_tag_value(value: Any) -> str:
-    if isinstance(value, bytes):
-        value = value.decode("latin-1")
-    if isinstance(value, str):
-        text = value.replace("\r", "\\r").replace("\n", "\\n")
-        if len(text) > MAX_TAG_TEXT:
-            return f"{text[:MAX_TAG_TEXT]}... ({len(value)} chars)"
-        return text
-    if isinstance(value, (list, tuple)):
-        shown = ", ".join(str(v) for v in value[:MAX_TAG_VALUES])
-        if len(value) > MAX_TAG_VALUES:
-            return f"{shown}, ... ({len(value)} values)"
-        return shown
-    return str(value)
-
-
-def tag_name(tag: int) -> str:
-    known = constants.Tag.get(tag)
-    return known.name if known is not None else "unknown"
-
-
-def format_ifd_tags(ifd: dict[str, Any]) -> list[str]:
-    lines = []
-    for tag, entry in sorted(ifd["tags"].items()):
-        value = format_tag_value(entry.get("data", "<unreadable>"))
-        lines.append(f"  {tag:>5d} {tag_name(tag):<28s} {value}")
-    return lines
-
-
-def format_tags(info: dict[str, Any], layout: Layout) -> str:
-    """Every tag of every IFD, headed by the IFD's role in the layout."""
-    roles = {ifd.offset: ifd.role.value for ifd in layout.all_ifds()}
-    lines: list[str] = []
-    for ifd in iter_all_ifds(info):
-        offset = int(ifd["offset"])
-        lines.append(f"ifd@{offset} ({roles.get(offset, 'unclassified')}):")
-        lines.extend(format_ifd_tags(ifd))
-    return "\n".join(lines)

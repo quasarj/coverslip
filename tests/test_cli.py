@@ -70,3 +70,15 @@ def test_unexpected_errors_keep_their_traceback(
     src = write_pyramid(tmp_path / "src.tif", rgb_image)
     with pytest.raises(PatchError):
         main(["redact", str(src), "--in-place", "-r", "1,1,9,9"])
+
+
+def test_inspect_lists_levels_and_tags(
+    tmp_path: Path, rgb_image: np.ndarray, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image)
+    assert main(["inspect", str(src)]) == 0
+    out = capsys.readouterr().out
+    assert "420x300" in out and "105x75" in out
+    assert "ImageWidth" not in out
+    assert main(["inspect", str(src), "--tags"]) == 0
+    assert "ImageWidth" in capsys.readouterr().out

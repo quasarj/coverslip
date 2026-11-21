@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from coverslip import info, layout as layout_mod
+from coverslip import info
 
 from conftest import load_layout
 
@@ -17,6 +17,7 @@ def test_summary_rows(lzw_pyramid: Path) -> None:
     assert full.photometric == "RGB"
     assert full.empty_chunks == 0
     assert full.stored_bytes > 0
+    assert full.offset == load_layout(lzw_pyramid).images[0].full.offset
 
 
 def test_report_lists_every_level(jpeg_pyramid: Path) -> None:
@@ -26,23 +27,8 @@ def test_report_lists_every_level(jpeg_pyramid: Path) -> None:
     assert lines[3].split()[:3] == ["level", "role", "size"]
     assert lines[4].split()[:3] == ["0", "full", "420x300"]
     assert "JPEG" in lines[4] and "YCbCr" in lines[4]
+    assert lines[4].split()[-1].startswith("@")
     assert len(lines) == 7
-
-
-def test_tags_dump(lzw_pyramid: Path) -> None:
-    raw = layout_mod.read_info(str(lzw_pyramid))
-    text = info.format_tags(raw, layout_mod.discover(raw))
-    assert text.count("ifd@") == 3
-    assert "(full):" in text.splitlines()[0]
-    assert "ImageWidth" in text
-    assert "TileOffsets" in text and "values)" in text
-
-
-def test_tag_value_formatting() -> None:
-    assert info.format_tag_value("a\nb") == "a\\nb"
-    assert info.format_tag_value("x" * 100).endswith("... (100 chars)")
-    assert info.format_tag_value([1, 2]) == "1, 2"
-    assert info.format_tag_value(5) == "5"
 
 
 def test_human_bytes() -> None:
