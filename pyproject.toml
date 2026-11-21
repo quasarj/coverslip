@@ -1,6 +1,6 @@
 [project]
-name = "tiffredact"
-version = "0.1.0"
+name = "coverslip"
+version = "0.2.0"
 description = "Redact rectangular pixel regions in whole-slide TIFF/BigTIFF/SVS/OME-TIFF images, touching only the affected tiles"
 authors = [
     { name = "Quasar Jarosz", email = "quasar@uams.edu" }
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tiffredact = "tiffredact.cli:main"
+coverslip = "coverslip.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

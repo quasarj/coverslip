@@ -1,6 +1,6 @@
 import pytest
 
-from tiffredact.model import Region, RegionSpec
+from coverslip.model import Region, RegionSpec
 
 
 def test_region_parse_and_bounds() -> None:

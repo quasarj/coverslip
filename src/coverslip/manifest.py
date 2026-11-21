@@ -11,11 +11,11 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-from tiffredact.model import Region
-from tiffredact.patches import PatchSet, Range
+from coverslip.model import Region
+from coverslip.patches import PatchSet, Range
 
 MANIFEST_VERSION = 1
-MANIFEST_SUFFIX = ".tiffredact-manifest.json"
+MANIFEST_SUFFIX = ".coverslip-manifest.json"
 
 
 class ManifestError(Exception):

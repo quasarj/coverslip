@@ -1,6 +1,6 @@
 import pytest
 
-from tiffredact.geometry import (
+from coverslip.geometry import (
     RegionFrameError,
     chunk_at,
     covers_chunk,
@@ -9,7 +9,7 @@ from tiffredact.geometry import (
     resolve_region,
     scale_region,
 )
-from tiffredact.model import (
+from coverslip.model import (
     Chunk,
     ImageIFD,
     Layout,

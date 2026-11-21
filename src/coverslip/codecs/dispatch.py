@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from tiffredact.codecs import jpeg_dct, pixel
-from tiffredact.codecs.fill import Rgb, chunk_fill_values
-from tiffredact.model import Chunk, ImageIFD, Region
+from coverslip.codecs import jpeg_dct, pixel
+from coverslip.codecs.fill import Rgb, chunk_fill_values
+from coverslip.model import Chunk, ImageIFD, Region
 
 logger = logging.getLogger(__name__)
 

@@ -9,20 +9,20 @@ from typing import Any
 
 import tifftools
 
-from tiffredact import __version__
-from tiffredact import layout as layout_mod
-from tiffredact.codecs.fill import UnsupportedFill
-from tiffredact.codecs.jpeg_dct import JpegDctError
-from tiffredact.codecs.pixel import UnsupportedCodec
-from tiffredact.geometry import RegionFrameError
-from tiffredact.inplace import InPlaceError, redact_in_place
-from tiffredact.manifest import ManifestError
-from tiffredact.model import RegionSpec
-from tiffredact.redact import RedactionError, RedactionReport, redact_file
-from tiffredact.scrub import ScrubError, describe_tags, parse_keep_tag
-from tiffredact.storage import StorageError
-from tiffredact.verify import VerifyError, verify_file, verify_in_place
-from tiffredact.writer import WriterError
+from coverslip import __version__
+from coverslip import layout as layout_mod
+from coverslip.codecs.fill import UnsupportedFill
+from coverslip.codecs.jpeg_dct import JpegDctError
+from coverslip.codecs.pixel import UnsupportedCodec
+from coverslip.geometry import RegionFrameError
+from coverslip.inplace import InPlaceError, redact_in_place
+from coverslip.manifest import ManifestError
+from coverslip.model import RegionSpec
+from coverslip.redact import RedactionError, RedactionReport, redact_file
+from coverslip.scrub import ScrubError, describe_tags, parse_keep_tag
+from coverslip.storage import StorageError
+from coverslip.verify import VerifyError, verify_file, verify_in_place
+from coverslip.writer import WriterError
 
 logger = logging.getLogger(__name__)
 
@@ -135,13 +135,13 @@ def _add_in_place(parser: argparse.ArgumentParser, help_text: str) -> None:
     parser.add_argument(
         "--manifest",
         metavar="PATH",
-        help="in-place manifest (default: <input>.tiffredact-manifest.json)",
+        help="in-place manifest (default: <input>.coverslip-manifest.json)",
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="tiffredact",
+        prog="coverslip",
         description="Redact rectangular pixel regions and identifying metadata "
         "in whole-slide TIFF images.",
     )
@@ -310,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
 def _report_error(command: str, exc: Exception) -> int:
     """Print an expected failure as one line; ``--verbose`` adds the traceback."""
     logger.debug("%s failed", command, exc_info=exc)
-    print(f"tiffredact {command}: error: {exc}", file=sys.stderr)
+    print(f"coverslip {command}: error: {exc}", file=sys.stderr)
     return EXIT_ERROR
 
 

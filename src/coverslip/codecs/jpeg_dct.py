@@ -15,7 +15,7 @@ import tempfile
 import jpeglib
 import numpy as np
 
-from tiffredact.model import Region
+from coverslip.model import Region
 
 SOI = b"\xff\xd8"
 EOI = b"\xff\xd9"
@@ -134,7 +134,7 @@ def redact_jpeg(
     tables simply redefine the shared ones.
     """
     joined = join_tables(tables, chunk)
-    with tempfile.TemporaryDirectory(prefix="tiffredact-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="coverslip-") as tmp:
         src = os.path.join(tmp, "in.jpg")
         dst = os.path.join(tmp, "out.jpg")
         with open(src, "wb") as fh:

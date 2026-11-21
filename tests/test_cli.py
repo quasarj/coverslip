@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tiffredact.cli import EXIT_ERROR, main
-from tiffredact.patches import PatchError
+from coverslip.cli import EXIT_ERROR, main
+from coverslip.patches import PatchError
 
 from conftest import write_pyramid
 
@@ -23,7 +23,7 @@ def test_unknown_level_is_a_one_line_error(
     status = main(["redact", str(src), str(out), "-r", "25,12,30,22@105x76"])
     assert status == EXIT_ERROR
     assert error_line(capsys) == (
-        "tiffredact redact: error: No pyramid level is 105x76; "
+        "coverslip redact: error: No pyramid level is 105x76; "
         "this file has 420x300, 210x150, 105x75"
     )
     assert not out.exists()
@@ -46,7 +46,7 @@ def test_missing_and_non_tiff_inputs_are_one_line_errors(
     text = tmp_path / "notes.txt"
     text.write_text("not a slide")
     assert main(["inspect", str(text)]) == EXIT_ERROR
-    assert error_line(capsys).startswith("tiffredact inspect: error: ")
+    assert error_line(capsys).startswith("coverslip inspect: error: ")
 
 
 def test_existing_output_is_a_one_line_error(
@@ -66,7 +66,7 @@ def test_unexpected_errors_keep_their_traceback(
     def broken_planner(*args: object, **kwargs: object) -> None:
         raise PatchError("Edits overlap at offset 8")
 
-    monkeypatch.setattr("tiffredact.cli.redact_in_place", broken_planner)
+    monkeypatch.setattr("coverslip.cli.redact_in_place", broken_planner)
     src = write_pyramid(tmp_path / "src.tif", rgb_image)
     with pytest.raises(PatchError):
         main(["redact", str(src), "--in-place", "-r", "1,1,9,9"])

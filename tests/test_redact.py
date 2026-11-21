@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import tifffile
 
-from tiffredact.model import Region, RegionSpec
-from tiffredact.redact import RedactionError, redact_file
-from tiffredact.verify import verify_file
+from coverslip.model import Region, RegionSpec
+from coverslip.redact import RedactionError, redact_file
+from coverslip.verify import verify_file
 
 from conftest import (
     make_image,
@@ -159,7 +159,7 @@ def test_region_outside_image_is_rejected(
 def test_refuses_to_overwrite_without_flag(
     tmp_path: Path, rgb_image: np.ndarray
 ) -> None:
-    from tiffredact.writer import WriterError
+    from coverslip.writer import WriterError
 
     src = write_pyramid(tmp_path / "src.tif", rgb_image, levels=1)
     out = tmp_path / "out.tif"

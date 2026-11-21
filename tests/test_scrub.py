@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 import tifffile
 
-from tiffredact import layout as layout_mod
-from tiffredact import scrub
-from tiffredact.model import Region
-from tiffredact.redact import RedactionError, redact_file
-from tiffredact.verify import verify_file
+from coverslip import layout as layout_mod
+from coverslip import scrub
+from coverslip.model import Region
+from coverslip.redact import RedactionError, redact_file
+from coverslip.verify import verify_file
 
 from conftest import make_image, requires_openslide, requires_svs, sample_svs_paths
 

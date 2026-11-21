@@ -6,7 +6,7 @@
 *.ome.tiff
 
 # in-place redaction manifests written next to the slides
-*.tiffredact-manifest.json
+*.coverslip-manifest.json
 
 # python
 __pycache__/

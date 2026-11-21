@@ -11,7 +11,7 @@ import logging
 import os
 from typing import BinaryIO, Protocol
 
-from tiffredact.patches import PatchSet
+from coverslip.patches import PatchSet
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from typing import Any, BinaryIO
 
 import tifftools
 
-from tiffredact.layout import (
+from coverslip.layout import (
     TAG_STRIP_BYTE_COUNTS,
     TAG_STRIP_OFFSETS,
     TAG_TILE_BYTE_COUNTS,
@@ -47,7 +47,7 @@ class ScratchStore:
 
     def __init__(self, base: int, directory: str | None = None) -> None:
         self.base = base
-        fd, self.path = tempfile.mkstemp(prefix="tiffredact-scratch-", dir=directory)
+        fd, self.path = tempfile.mkstemp(prefix="coverslip-scratch-", dir=directory)
         self._fh: BinaryIO = os.fdopen(fd, "w+b")
         self.size = 0
 

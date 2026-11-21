@@ -1,4 +1,4 @@
-# tiffredact — plan
+# coverslip — plan
 
 ## Goal
 
@@ -86,7 +86,7 @@ mature Python bindings, and the TIFF plumbing exists already.
 ## Architecture
 
 ```
-src/tiffredact/
+src/coverslip/
   model.py        dataclasses: Chunk (tile or strip geometry), Level, Image, SlideLayout
   layout.py       discover levels / thumbnail / label / macro / SubIFD pyramids (SVS, OME, generic)
   geometry.py     region mapping between levels, chunk intersection, MCU snapping
@@ -96,7 +96,7 @@ src/tiffredact/
     dispatch.py   choose codec path per chunk, solid-fill tile cache
   writer.py       build new IFD set; virtual source file = original ∪ scratch; tifftools.write_tiff
   redact.py       orchestration: layout → regions → chunks → codec → writer
-  cli.py          `tiffredact redact`, `tiffredact inspect`, `tiffredact verify`
+  cli.py          `coverslip redact`, `coverslip inspect`, `coverslip verify`
 tests/            mirrors src; synthetic TIFFs generated with tifffile; SVS tests skipped if samples absent
 ```
 
@@ -118,7 +118,7 @@ Label and macro removal: drop those IFDs from the list before writing.
 
 Status as of 2026-11-18:
 
-1. **Scaffold + inspection** — done. `tiffredact inspect` prints the discovered
+1. **Scaffold + inspection** — done. `coverslip inspect` prints the discovered
    layout for SVS, OME-TIFF and generic pyramids.
 2. **End-to-end with pixel-domain re-encode** — done (`--no-dct` path and all
    lossless codecs).
@@ -133,7 +133,7 @@ Status as of 2026-11-18:
    33005 sample verified with OpenSlide). No parallelism was needed: the
    1.8 GB sample slide takes ~6 s for ~2400 tiles.
 
-Results on real files (all verified with `tiffredact verify`, OpenSlide and
+Results on real files (all verified with `coverslip verify`, OpenSlide and
 tifffile; untouched areas byte/pixel identical):
 
 | file | structure | chunks rewritten | time |

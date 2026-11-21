@@ -9,13 +9,13 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
-from tiffredact import layout as layout_mod
-from tiffredact.codecs.dispatch import redact_chunk
-from tiffredact.codecs.fill import Rgb
-from tiffredact.geometry import intersecting_chunks, resolve_regions, scale_region
-from tiffredact.model import Chunk, ImageIFD, Layout, Region, RegionInput
-from tiffredact.scrub import ScrubReport, scrub_info
-from tiffredact.writer import (
+from coverslip import layout as layout_mod
+from coverslip.codecs.dispatch import redact_chunk
+from coverslip.codecs.fill import Rgb
+from coverslip.geometry import intersecting_chunks, resolve_regions, scale_region
+from coverslip.model import Chunk, ImageIFD, Layout, Region, RegionInput
+from coverslip.scrub import ScrubReport, scrub_info
+from coverslip.writer import (
     Placement,
     ScratchStore,
     VirtualSource,

@@ -6,15 +6,15 @@ import pytest
 import tifffile
 import tifftools
 
-from tiffredact import layout as layout_mod
-from tiffredact import scrub
-from tiffredact.cli import main
-from tiffredact.inplace import InPlaceError, redact_in_place
-from tiffredact.manifest import Manifest, default_manifest_path
-from tiffredact.model import Region
-from tiffredact.redact import redact_file
-from tiffredact.storage import LocalFileStorage
-from tiffredact.verify import verify_in_place
+from coverslip import layout as layout_mod
+from coverslip import scrub
+from coverslip.cli import main
+from coverslip.inplace import InPlaceError, redact_in_place
+from coverslip.manifest import Manifest, default_manifest_path
+from coverslip.model import Region
+from coverslip.redact import redact_file
+from coverslip.storage import LocalFileStorage
+from coverslip.verify import verify_in_place
 
 from conftest import (
     make_image,
@@ -54,7 +54,7 @@ def page_tags(path: Path) -> list[dict[int, object]]:
 
 def touched_source_chunks(src: Path, regions: list[Region]) -> list[bytes]:
     """Original bytes of the chunks a redaction of ``regions`` replaces."""
-    from tiffredact.redact import plan_work
+    from coverslip.redact import plan_work
 
     layout = layout_mod.discover(layout_mod.read_info(str(src)))
     chunks = []
@@ -297,7 +297,7 @@ def test_classic_tiff_refuses_to_grow_past_4gb(
 
 
 def test_ome_drop_label_is_refused_before_writing(tmp_path: Path) -> None:
-    from tiffredact.redact import RedactionError
+    from coverslip.redact import RedactionError
 
     src = write_pyramid(tmp_path / "src.ome.tif", make_image(200, 260), ome=True)
     untouched = src.read_bytes()

@@ -1,6 +1,6 @@
 import pytest
 
-from tiffredact.patches import (
+from coverslip.patches import (
     Patch,
     PatchError,
     PatchSet,

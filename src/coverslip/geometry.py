@@ -6,7 +6,7 @@ import logging
 import math
 from collections.abc import Iterable
 
-from tiffredact.model import (
+from coverslip.model import (
     Chunk,
     ImageIFD,
     Layout,

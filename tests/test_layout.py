@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tiffredact import layout as layout_mod
-from tiffredact.model import Role
+from coverslip import layout as layout_mod
+from coverslip.model import Role
 
 from conftest import make_image, requires_svs, sample_svs_paths, write_pyramid
 
@@ -171,8 +171,8 @@ def test_ome_secondary_image_is_classified_as_macro(tmp_path: Path) -> None:
 def test_ome_regions_skip_macro_and_drop_is_refused(tmp_path: Path) -> None:
     import tifffile
 
-    from tiffredact.model import Region
-    from tiffredact.redact import RedactionError, redact_file
+    from coverslip.model import Region
+    from coverslip.redact import RedactionError, redact_file
 
     path = tmp_path / "with_macro.ome.tif"
     main = make_image(256, 320)

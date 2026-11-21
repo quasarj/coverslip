@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 
 import tifftools
 
-from tiffredact.model import ImageIFD, Layout, PyramidImage, Role
+from coverslip.model import ImageIFD, Layout, PyramidImage, Role
 
 logger = logging.getLogger(__name__)
 

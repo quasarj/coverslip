@@ -2,7 +2,7 @@
 
 The planner compares the IFD tree as read (``before``) with the tree after
 label/macro removal, scrubbing and chunk replacement (``after``) and emits a
-:class:`~tiffredact.patches.PatchSet`:
+:class:`~coverslip.patches.PatchSet`:
 
 * replaced chunks are written over their old slot when they fit, otherwise
   appended to the end of the file;
@@ -29,22 +29,22 @@ from typing import Any
 
 import tifftools
 
-from tiffredact.codecs.fill import Rgb
-from tiffredact.layout import (
+from coverslip.codecs.fill import Rgb
+from coverslip.layout import (
     TAG_STRIP_BYTE_COUNTS,
     TAG_STRIP_OFFSETS,
     TAG_TILE_BYTE_COUNTS,
     TAG_TILE_OFFSETS,
 )
-from tiffredact.manifest import (
+from coverslip.manifest import (
     ChunkRecord,
     Manifest,
     default_manifest_path,
     sha256_hex,
 )
-from tiffredact.model import ImageIFD, Layout, RegionInput
-from tiffredact.patches import Patch, PatchSet, Range, Zero, subtract_ranges
-from tiffredact.redact import (
+from coverslip.model import ImageIFD, Layout, RegionInput
+from coverslip.patches import Patch, PatchSet, Range, Zero, subtract_ranges
+from coverslip.redact import (
     ChunkWork,
     ReadRange,
     RedactionReport,
@@ -52,7 +52,7 @@ from tiffredact.redact import (
     load_plan,
     rewrite_chunks,
 )
-from tiffredact.storage import LocalFileStorage, Storage
+from coverslip.storage import LocalFileStorage, Storage
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +471,7 @@ def redact_in_place(
     """Redact ``path`` itself, writing only the bytes that change.
 
     The manifest is saved before the file is touched, so an interrupted run
-    can still be audited with :func:`tiffredact.verify.verify_in_place`.
+    can still be audited with :func:`coverslip.verify.verify_in_place`.
     """
     manifest_path = manifest_path or default_manifest_path(path)
     if os.path.exists(manifest_path) and not overwrite_manifest:

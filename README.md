@@ -1,4 +1,4 @@
-# tiffredact
+# coverslip
 
 Redact rectangular pixel regions in whole-slide images (tiled TIFF / BigTIFF,
 Aperio SVS, OME-TIFF) by rewriting **only the tiles that intersect the
@@ -23,27 +23,27 @@ used only by the test suite.
 
 ```sh
 # what is in the file?
-uv run tiffredact inspect slide.svs
+uv run coverslip inspect slide.svs
 
 # black out two rectangles (x,y,width,height at level 0), drop label and macro
-uv run tiffredact redact slide.svs redacted.svs \
+uv run coverslip redact slide.svs redacted.svs \
     -r 5000,4000,3000,2000 -r 100,100,500,900 --drop-label --drop-macro
 
 # audit the result against the source
-uv run tiffredact verify slide.svs redacted.svs -r 5000,4000,3000,2000 -r 100,100,500,900
+uv run coverslip verify slide.svs redacted.svs -r 5000,4000,3000,2000 -r 100,100,500,900
 
 # a rectangle drawn on the 2875x2055 level (dimensions as printed by inspect)
-uv run tiffredact redact slide.svs redacted.svs -r 310,250,190,125@2875x2055
+uv run coverslip redact slide.svs redacted.svs -r 310,250,190,125@2875x2055
 
 # metadata only: strip identifying tags and description fields, keep pixels
-uv run tiffredact scrub slide.svs clean.svs --drop-label --drop-macro
-uv run tiffredact verify slide.svs clean.svs --scrubbed
+uv run coverslip scrub slide.svs clean.svs --drop-label --drop-macro
+uv run coverslip verify slide.svs clean.svs --scrubbed
 
 # both at once
-uv run tiffredact redact slide.svs clean.svs -r 5000,4000,3000,2000 --scrub
+uv run coverslip redact slide.svs clean.svs -r 5000,4000,3000,2000 --scrub
 
 # see every tag and what scrubbing would do to it
-uv run tiffredact inspect slide.svs --tags
+uv run coverslip inspect slide.svs --tags
 ```
 
 Options for `redact`:
@@ -66,7 +66,7 @@ the other levels it can grow by up to one pixel of the level it was drawn on.
 Reports and in-place manifests record the full-resolution rectangle.
 
 A run that cannot be carried out (unknown level, unreadable or unsupported
-file, existing output) prints one `tiffredact <command>: error: ...` line and
+file, existing output) prints one `coverslip <command>: error: ...` line and
 exits with status 2; `-v` adds the traceback.
 
 `verify` exits with status 1 if any pixel in the mapped region on any level is not
@@ -84,19 +84,19 @@ network mount.
 
 ```sh
 # redact and scrub slide.svs itself; no output argument
-uv run tiffredact redact slide.svs --in-place \
+uv run coverslip redact slide.svs --in-place \
     -r 5000,4000,3000,2000 --drop-label --drop-macro --scrub
-uv run tiffredact scrub slide.svs --in-place
+uv run coverslip scrub slide.svs --in-place
 
 # audit it; regions, fill and scrub settings come from the manifest
-uv run tiffredact verify slide.svs --in-place
+uv run coverslip verify slide.svs --in-place
 ```
 
 **There is no source left afterwards.** Keep a copy, or storage-level
 versioning, until the audit has passed.
 
 * A manifest is written next to the file before it is modified
-  (`slide.svs.tiffredact-manifest.json`, or `--manifest PATH`). It records the
+  (`slide.svs.coverslip-manifest.json`, or `--manifest PATH`). It records the
   regions and settings, every byte range written or zeroed, and where each
   replaced chunk used to be. `verify --in-place` needs it. An existing
   manifest is not replaced without `--overwrite`.
@@ -225,7 +225,7 @@ Scrubbing does not touch pixel data; label and macro images still need
 | Leica-1.ome.tiff, 723 MB | OME BigTIFF, planar JPEG, SubIFD pyramid + macro | 1314 | 2 s |
 | Zeiss Axio Scan OME-TIFF (Bio-Formats 8.5), 3.9 GB | OME BigTIFF, YCbCr JPEG, 9-level SubIFD pyramid | 27 | 1 s |
 
-All outputs pass `tiffredact verify`; untouched areas were also confirmed
+All outputs pass `coverslip verify`; untouched areas were also confirmed
 identical with OpenSlide and tifffile. The Zeiss output was also read with
 Bio-Formats 8.5 (`showinf`, `bfconvert -crop`) with the same core metadata
 as the source.

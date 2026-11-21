@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from tiffredact.codecs import pixel
-from tiffredact.codecs.fill import fill_samples
-from tiffredact.model import Chunk, ImageIFD, Region, Role
+from coverslip.codecs import pixel
+from coverslip.codecs.fill import fill_samples
+from coverslip.model import Chunk, ImageIFD, Region, Role
 
 from conftest import make_image
 

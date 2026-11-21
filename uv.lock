@@ -12,6 +12,41 @@ wheels = [
 ]
 
 [[package]]
+name = "coverslip"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "imagecodecs" },
+    { name = "jpeglib" },
+    { name = "numpy" },
+    { name = "tifffile" },
+    { name = "tifftools" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "openslide-bin" },
+    { name = "openslide-python" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imagecodecs", specifier = ">=2026.11.11" },
+    { name = "jpeglib", specifier = ">=1.0.2" },
+    { name = "numpy", specifier = ">=2.5.5" },
+    { name = "tifffile", specifier = ">=2026.11.16" },
+    { name = "tifftools", specifier = ">=1.7.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "openslide-bin", specifier = ">=4.0.1.2" },
+    { name = "openslide-python", specifier = ">=1.4.7" },
+    { name = "pytest", specifier = ">=9.2.0" },
+]
+
+[[package]]
 name = "imagecodecs"
 version = "2026.11.11"
 source = { registry = "https://pypi.org/simple" }
@@ -271,41 +306,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d6/e1/f09384869bcf78bae3a794a86d8a90753fb2a6f4646c07ec941ff629cd33/tifffile-2026.11.16.tar.gz", hash = "sha256:d9c246d464f1c3ca9ab62c5225b3ff45578f33629029dbbd9f62f4e901702726", size = 462802, upload-time = "2026-11-17T03:35:19.648Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/3a/483491be6f7eb070d1c22b1182bbbc0243e85bf5903fafe3f80b6aeb3dba/tifffile-2026.11.16-py3-none-any.whl", hash = "sha256:d2103c2537f185868f0a880eceba590b316aa1981bd76d91028e5f2eb0e1a6e6", size = 279737, upload-time = "2026-11-17T03:35:18.375Z" },
-]
-
-[[package]]
-name = "tiffredact"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "imagecodecs" },
-    { name = "jpeglib" },
-    { name = "numpy" },
-    { name = "tifffile" },
-    { name = "tifftools" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "openslide-bin" },
-    { name = "openslide-python" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imagecodecs", specifier = ">=2026.11.11" },
-    { name = "jpeglib", specifier = ">=1.0.2" },
-    { name = "numpy", specifier = ">=2.5.5" },
-    { name = "tifffile", specifier = ">=2026.11.16" },
-    { name = "tifftools", specifier = ">=1.7.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "openslide-bin", specifier = ">=4.0.1.2" },
-    { name = "openslide-python", specifier = ">=1.4.7" },
-    { name = "pytest", specifier = ">=9.2.0" },
 ]
 
 [[package]]

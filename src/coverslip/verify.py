@@ -21,21 +21,21 @@ from typing import Any
 
 import numpy as np
 
-from tiffredact import layout as layout_mod
-from tiffredact.codecs import pixel
-from tiffredact.codecs.fill import Rgb, chunk_fill_values
-from tiffredact.geometry import (
+from coverslip import layout as layout_mod
+from coverslip.codecs import pixel
+from coverslip.codecs.fill import Rgb, chunk_fill_values
+from coverslip.geometry import (
     chunk_at,
     intersecting_chunks,
     resolve_regions,
     scale_region,
 )
-from tiffredact.inplace import TiffFormat, chunk_extents, tag_data_extent, walk_ifds
-from tiffredact.manifest import Manifest, default_manifest_path, sha256_hex
-from tiffredact.model import ImageIFD, Layout, Region, RegionInput
-from tiffredact.patches import merge_ranges, ranges_intersect
-from tiffredact.scrub import scrub_problems
-from tiffredact.storage import LocalFileStorage, Storage
+from coverslip.inplace import TiffFormat, chunk_extents, tag_data_extent, walk_ifds
+from coverslip.manifest import Manifest, default_manifest_path, sha256_hex
+from coverslip.model import ImageIFD, Layout, Region, RegionInput
+from coverslip.patches import merge_ranges, ranges_intersect
+from coverslip.scrub import scrub_problems
+from coverslip.storage import LocalFileStorage, Storage
 
 logger = logging.getLogger(__name__)
 

@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tiffredact import layout as layout_mod
-from tiffredact.model import Region, Role
-from tiffredact.redact import redact_file
-from tiffredact.verify import verify_file
+from coverslip import layout as layout_mod
+from coverslip.model import Region, Role
+from coverslip.redact import redact_file
+from coverslip.verify import verify_file
 
 from conftest import requires_openslide, requires_sample, sample_path
 

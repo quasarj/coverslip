@@ -25,7 +25,7 @@ from xml.etree import ElementTree
 
 import tifftools
 
-from tiffredact.layout import TAG_IMAGE_DESCRIPTION, iter_all_ifds
+from coverslip.layout import TAG_IMAGE_DESCRIPTION, iter_all_ifds
 
 logger = logging.getLogger(__name__)
 

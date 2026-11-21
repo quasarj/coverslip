@@ -2,15 +2,15 @@ import imagecodecs
 import numpy as np
 import pytest
 
-from tiffredact.codecs.jpeg_dct import (
+from coverslip.codecs.jpeg_dct import (
     JpegDctError,
     join_tables,
     quantized_dc,
     redact_jpeg,
     strip_app0,
 )
-from tiffredact.codecs.fill import fill_samples
-from tiffredact.model import Region
+from coverslip.codecs.fill import fill_samples
+from coverslip.model import Region
 
 from conftest import make_image
 

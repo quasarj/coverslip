@@ -10,8 +10,8 @@ from __future__ import annotations
 import imagecodecs
 import numpy as np
 
-from tiffredact.codecs.fill import Rgb, chunk_fill_values
-from tiffredact.model import Chunk, ImageIFD, Region
+from coverslip.codecs.fill import Rgb, chunk_fill_values
+from coverslip.model import Chunk, ImageIFD, Region
 
 COMPRESSION_NONE = 1
 COMPRESSION_LZW = 5
