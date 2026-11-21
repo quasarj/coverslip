@@ -6,9 +6,13 @@ import glob
 import os
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pytest
 import tifffile
+
+# tests never open windows
+matplotlib.use("Agg")
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -131,3 +135,9 @@ def has_openslide() -> bool:
 requires_openslide = pytest.mark.skipif(
     not has_openslide(), reason="openslide not available"
 )
+
+
+def load_layout(path: Path):
+    from coverslip import layout as layout_mod
+
+    return layout_mod.discover(layout_mod.read_info(str(path)))

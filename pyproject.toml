@@ -9,6 +9,7 @@ requires-python = ">=3.14"
 dependencies = [
     "imagecodecs>=2026.11.11",
     "jpeglib>=1.0.2",
+    "matplotlib>=3.11.2",
     "numpy>=2.5.5",
     "tifffile>=2026.11.16",
     "tifftools>=1.7.0",

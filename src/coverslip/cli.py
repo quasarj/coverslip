@@ -9,7 +9,7 @@ from typing import Any
 
 import tifftools
 
-from coverslip import __version__
+from coverslip import __version__, view_cli
 from coverslip import layout as layout_mod
 from coverslip.codecs.fill import UnsupportedFill
 from coverslip.codecs.jpeg_dct import JpegDctError
@@ -44,6 +44,7 @@ EXPECTED_ERRORS: tuple[type[Exception], ...] = (
     UnsupportedFill,
     VerifyError,
     WriterError,
+    *view_cli.VIEW_ERRORS,
 )
 """Failures caused by the input or the request rather than by a bug.
 
@@ -197,6 +198,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="also check that identifying metadata is gone",
     )
     _add_keep_tag(p_verify)
+
+    view_cli.add_parsers(sub)
     return parser
 
 
@@ -300,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         "redact": cmd_redact,
         "scrub": cmd_scrub,
         "verify": cmd_verify,
+        **view_cli.HANDLERS,
     }
     try:
         return handlers[args.command](args)

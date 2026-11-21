@@ -75,8 +75,21 @@ def _jpeg_subsampling(ifd: ImageIFD) -> str | None:
     )
 
 
-def decode_chunk(ifd: ImageIFD, data: bytes, chunk: Chunk) -> np.ndarray:
-    """Decode one tile/strip to an array of shape (height, width, samples)."""
+def _jpeg_outcolorspace(ifd: ImageIFD, to_rgb: bool) -> str | None:
+    colorspace = _jpeg_colorspace(ifd)
+    if to_rgb and colorspace == "YCBCR":
+        return "RGB"
+    return colorspace
+
+
+def decode_chunk(
+    ifd: ImageIFD, data: bytes, chunk: Chunk, *, to_rgb: bool = False
+) -> np.ndarray:
+    """Decode one tile/strip to an array of shape (height, width, samples).
+
+    Samples come back as stored, ready to be re-encoded, unless ``to_rgb`` is
+    set (for display), which converts YCbCr JPEG chunks to RGB.
+    """
     comp = ifd.compression
     shape = (chunk.height, chunk.width, ifd.samples_per_chunk)
     if comp == COMPRESSION_JPEG:
@@ -84,7 +97,7 @@ def decode_chunk(ifd: ImageIFD, data: bytes, chunk: Chunk) -> np.ndarray:
             data,
             tables=ifd.jpegtables,
             colorspace=_jpeg_colorspace(ifd),
-            outcolorspace=_jpeg_colorspace(ifd),
+            outcolorspace=_jpeg_outcolorspace(ifd, to_rgb),
         )
         return _as_chunk_shape(array, shape)
     if comp in JPEG2000_COMPRESSIONS:
