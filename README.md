@@ -1,30 +1,142 @@
 # coverslip
 
-Redact rectangular pixel regions in whole-slide images (tiled TIFF / BigTIFF,
-Aperio SVS, OME-TIFF) by rewriting **only the tiles that intersect the
-region**. Every other tile is copied byte-for-byte, so the rest of the slide
-takes no generation loss and a multi-gigabyte slide is processed in seconds.
+Inspect, view, redact and scrub whole-slide images (tiled TIFF / BigTIFF,
+Aperio SVS, OME-TIFF) from the command line.
 
-Regions are given in full-resolution pixel coordinates, or in the pixels of any
-other pyramid level (`X,Y,W,H@WxH`); either way the tool maps them onto every
-pyramid level and onto the SVS thumbnail itself.
+* **Inspect and view.** Coverslip lists the pyramid levels and associated
+  images, opens any level in a window, and opens single tiles of a large level
+  by clicking on an overview. A heatmap of stored bytes per tile shows tissue,
+  background and empty tiles at a glance.
+* **Draw regions.** Drag rectangles on a level to get the exact `-r` arguments
+  `redact` takes, or preview regions you already have.
+* **Redact.** Coverslip blacks out rectangular regions by rewriting **only the
+  tiles that intersect them**. Every other tile is copied byte-for-byte, so the
+  rest of the slide takes no generation loss and a multi-gigabyte slide is
+  processed in seconds. You can work on a copy or modify the file in place.
+* **Scrub.** Coverslip strips identifying metadata and keeps the slide
+  readable.
+
+Coverslip was formed from two earlier projects, tiffredact and tiffview.
 
 ## Install
 
 ```sh
-uv sync
+uv sync                       # everything, including the viewer and test tools
+uv pip install .              # headless: inspect, redact, scrub, verify
+uv pip install '.[view]'      # plus the viewer (show, tile, grid)
 ```
 
 Runtime dependencies: `tifffile`, `imagecodecs`, `jpeglib`, `tifftools`,
-`numpy`. OpenSlide (`openslide-python` + `openslide-bin`) is a dev dependency
-used only by the test suite.
+`numpy`. The viewer also needs `matplotlib`, which is the optional `view`
+extra. Without it, `show`, `tile` and `grid` exit with a hint to install it,
+and everything else still works. OpenSlide (`openslide-python` +
+`openslide-bin`) is a dev dependency, used only by the test suite.
 
-## Usage
+## Inspecting
 
 ```sh
-# what is in the file?
-uv run coverslip inspect slide.svs
+uv run coverslip inspect slide.svs          # levels and associated images
+uv run coverslip inspect slide.svs --tags   # every tag, and what scrubbing would do
+```
 
+`inspect` prints one row for each pyramid level and each associated image
+(label, macro, thumbnail). Each row gives:
+- the size
+- the tile (or strip) size and the tile grid
+- the number of empty tiles (zero bytes stored)
+- compression and photometric interpretation
+- samples × bits
+- the downsample factor from full resolution
+- the bytes stored for that image
+- the IFD offset
+
+Level numbers in this table are the ones the viewer takes: `0` is full
+resolution, and higher numbers are smaller.
+
+## Viewing
+
+```sh
+# open an overview; click it to open full-resolution tiles
+uv run coverslip show slide.svs
+
+# a specific level, with clicks opening tiles of level 1 instead
+uv run coverslip show slide.svs --level 3 --tile-level 1
+
+# start with the tile byte-count map overlaid
+uv run coverslip show slide.svs --grid
+
+# associated images
+uv run coverslip show slide.svs --label     # also --macro, --thumbnail
+
+# one tile, by grid position or by a point in that level's pixels
+uv run coverslip tile slide.svs --col 120 --row 45
+uv run coverslip tile slide.svs --level 1 --at 9000,6100
+
+# the byte-count map of a level on its own; click a cell to open that tile
+uv run coverslip grid slide.svs --level 0
+```
+
+**Default level.** Without `--level`, `show` picks the smallest tiled level
+whose long side is at least 1000 px and that fits within the pixel limit. It
+uses a stripped thumbnail only when no tiled level qualifies.
+
+**Pixel limit.** Levels over 8192 × 8192 pixels are refused unless you pass
+`--force`. Assembling a full-resolution level can take many gigabytes of
+memory.
+
+In the `show` window:
+
+| input | action |
+|---|---|
+| hover | level coordinates, plus the tile under the cursor (at `--tile-level`) and its stored bytes |
+| left click | open that tile in a new window; opened tiles are outlined in yellow |
+| `g` | toggle the byte-count map; empty tiles are red |
+| `r` | toggle region drawing (see below) |
+| `u` | undo the last region drawn |
+| toolbar | pan and zoom; clicks don't open tiles while a tool is active |
+
+**`tile` window.** The window shows one tile, cropped to the image bounds.
+The title gives the tile's grid position, its pixel position on the level,
+its file offset and its stored size.
+
+**`grid` window.** The window shows the byte-count map as a heatmap. Clicking
+a cell opens that tile.
+
+### Drawing redaction regions
+
+Press `r` in the `show` window, and dragging then draws rectangles instead of
+opening tiles. Each rectangle is printed the moment you draw it, as a `-r`
+argument in the shown level's own pixels:
+
+```
+-r 310,250,190,125@2875x2055
+```
+
+When you close the window, coverslip prints a complete command:
+
+```
+redact with:
+coverslip redact slide.svs OUTPUT -r 310,250,190,125@2875x2055
+```
+
+The rectangle includes every pixel it partly covers. Because a stored
+level's own pixels are exactly what `redact` accepts, nothing is lost between
+drawing and redacting.
+
+To check regions before redacting, pass them to `show`. The viewer draws them
+dashed, in the area `redact` would actually paint on the shown level,
+including its outward rounding:
+
+```sh
+uv run coverslip show slide.svs -r 5000,4000,3000,2000 -r 310,250,190,125@2875x2055
+```
+
+Regions you draw in that window are added to the printed command, after the
+ones you passed in.
+
+## Redacting
+
+```sh
 # black out two rectangles (x,y,width,height at level 0), drop label and macro
 uv run coverslip redact slide.svs redacted.svs \
     -r 5000,4000,3000,2000 -r 100,100,500,900 --drop-label --drop-macro
@@ -41,9 +153,6 @@ uv run coverslip verify slide.svs clean.svs --scrubbed
 
 # both at once
 uv run coverslip redact slide.svs clean.svs -r 5000,4000,3000,2000 --scrub
-
-# see every tag and what scrubbing would do to it
-uv run coverslip inspect slide.svs --tags
 ```
 
 Options for `redact`:
@@ -65,9 +174,15 @@ full resolution with outward rounding and then applied to every level, so on
 the other levels it can grow by up to one pixel of the level it was drawn on.
 Reports and in-place manifests record the full-resolution rectangle.
 
-A run that cannot be carried out (unknown level, unreadable or unsupported
-file, existing output) prints one `coverslip <command>: error: ...` line and
-exits with status 2; `-v` adds the traceback.
+A run that cannot be carried out prints one `coverslip <command>: error: ...`
+line and exits with status 2. Examples:
+- an unknown level
+- an unreadable or unsupported file
+- an existing output
+- a level over the viewer's pixel limit
+
+Add `-v` for the traceback. When a clicked tile cannot be opened (an empty
+tile or an unsupported codec), the viewer logs a warning and keeps running.
 
 `verify` exits with status 1 if any pixel in the mapped region on any level is not
 the fill colour, if any untouched chunk differs from the source, or if the bytes
@@ -179,6 +294,11 @@ Scrubbing does not touch pixel data; label and macro images still need
    file through a virtual address space. The output has no orphaned bytes, all
    tags (ICC, OME-XML, vendor description, unknown tags) are preserved, and
    classic/BigTIFF is kept as in the input.
+5. **Viewing** (`chunks.py`, `viewer.py`): tiles are read and decoded one at a
+   time with the same codecs, converting YCbCr JPEG to RGB for display, and a
+   level is assembled from its tiles. Decoded tiles match OpenSlide on the
+   Aperio JPEG, Aperio JPEG 2000 and generic YCbCr samples. Regions drawn
+   in the viewer (`regions.py`) go through the same geometry as `redact`.
 
 ## Guarantees and limits
 
@@ -237,4 +357,9 @@ uv run pytest
 ```
 
 Synthetic pyramids are generated with `tifffile`. Tests on real Aperio files run
-when `*.svs` files are present in the repository root and are skipped otherwise.
+when `*.svs` files are present in the repository root, and some tests compare
+decoded tiles with OpenSlide on slides in `samples/`. Either kind is skipped
+when its files are missing.
+
+Viewer tests run headless on matplotlib's Agg backend. They drive the windows
+with synthetic clicks, key presses and drags.

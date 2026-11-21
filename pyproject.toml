@@ -1,7 +1,7 @@
 [project]
 name = "coverslip"
 version = "0.2.0"
-description = "Redact rectangular pixel regions in whole-slide TIFF/BigTIFF/SVS/OME-TIFF images, touching only the affected tiles"
+description = "Inspect, view, redact and scrub whole-slide TIFF/BigTIFF/SVS/OME-TIFF images, touching only the affected tiles"
 authors = [
     { name = "Quasar Jarosz", email = "quasar@uams.edu" }
 ]

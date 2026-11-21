@@ -1,5 +1,9 @@
 # tiffview plan
 
+> Historical: the plan for tiffview, written before it was merged into
+> coverslip. Module and command names below are tiffview's; `info` is now
+> `coverslip inspect`.
+
 A CLI tool for local viewing and inspection of whole-slide TIFF files (tiled
 TIFF / BigTIFF, Aperio SVS, OME-TIFF). No tile server, no smooth zooming: pick a
 pyramid level and view it whole, or pick individual tiles of a large level and
