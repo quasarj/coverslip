@@ -13,9 +13,9 @@ import logging
 from pathlib import Path
 from types import ModuleType
 
-from coverslip import chunks, gridmap
+from coverslip import chunks, gridmap, regions
 from coverslip import layout as layout_mod
-from coverslip.model import ImageIFD, Layout, PyramidImage, Role
+from coverslip.model import ImageIFD, Layout, PyramidImage, RegionSpec, Role
 
 DEFAULT_VIEW_SIDE = 1000
 """``show`` picks the smallest level whose long side is at least this."""
@@ -48,6 +48,15 @@ def parse_point(text: str) -> tuple[float, float]:
     except ValueError as exc:
         raise argparse.ArgumentTypeError("point values must be numbers") from exc
     return x, y
+
+
+def checked_region(text: str) -> str:
+    """Validate a ``-r`` style region but keep its text, to echo it back."""
+    try:
+        RegionSpec.parse(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    return text
 
 
 def _add_image(parser: argparse.ArgumentParser) -> None:
@@ -87,6 +96,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         "--grid", action="store_true", help="start with the byte-count map shown"
     )
     p_show.add_argument("--force", action="store_true", help="show a level of any size")
+    p_show.add_argument(
+        "-r",
+        "--region",
+        action="append",
+        default=[],
+        type=checked_region,
+        metavar="X,Y,W,H[@WxH]",
+        help="preview a redaction region, as redact takes it; repeatable",
+    )
     _add_image(p_show)
 
     p_tile = sub.add_parser("tile", help="open one tile")
@@ -215,42 +233,64 @@ def _show_associated(args: argparse.Namespace, layout: Layout, role: Role) -> No
     viewer.level_figure(array, ifd, window_title(args.path, role.value, ifd))
 
 
-def _show_level(args: argparse.Namespace, layout: Layout) -> None:
+def _show_level(args: argparse.Namespace, layout: Layout) -> list[str]:
+    """Show a pyramid level; return the regions drawn, as ``-r`` arguments."""
     viewer = load_viewer()
     image = select_image(layout, args.image)
     n = args.level if args.level is not None else default_view_level(image)
     view = select_level(image, n)
     tiles = select_level(image, args.tile_level)
+    specs = [RegionSpec.parse(text) for text in args.region]
+    preview = regions.preview_on_level(layout, image.full, view, specs)
     max_pixels = None if args.force else chunks.DEFAULT_MAX_PIXELS
     array = chunks.read_level(args.path, view, max_pixels)
     print(
         f"showing level {n} ({view.width}x{view.height}); click to open level "
-        f"{args.tile_level} tiles, g toggles the byte-count map"
+        f"{args.tile_level} tiles, g toggles the byte-count map, r draws "
+        "redaction regions"
     )
-    viewer.level_figure(
+    level = viewer.level_figure(
         array,
         view,
         window_title(args.path, f"level {n}", view),
         tiles=tiles,
         open_tile=viewer.tile_opener(args.path, tiles, str(args.tile_level)),
         show_grid=args.grid,
+        draw_regions=True,
+        preview=preview,
     )
+    viewer.run()
+    return level.region_args()
 
 
 def cmd_show(args: argparse.Namespace) -> int:
     viewer = load_viewer()
     layout = load(args.path, args.verbose)
     viewer.configure_matplotlib()
-    if args.label:
-        _show_associated(args, layout, Role.LABEL)
-    elif args.macro:
-        _show_associated(args, layout, Role.MACRO)
-    elif args.thumbnail:
-        _show_associated(args, layout, Role.THUMBNAIL)
-    else:
-        _show_level(args, layout)
-    viewer.run()
+    associated = _associated_role(args)
+    if associated is not None:
+        if args.region:
+            raise SelectionError(
+                f"--region previews apply to pyramid levels, not --{associated.value}"
+            )
+        _show_associated(args, layout, associated)
+        viewer.run()
+        return 0
+    drawn = _show_level(args, layout)
+    if drawn:
+        print("redact with:")
+        print(regions.redact_command(args.path, args.region + drawn))
     return 0
+
+
+def _associated_role(args: argparse.Namespace) -> Role | None:
+    if args.label:
+        return Role.LABEL
+    if args.macro:
+        return Role.MACRO
+    if args.thumbnail:
+        return Role.THUMBNAIL
+    return None
 
 
 def cmd_tile(args: argparse.Namespace) -> int:

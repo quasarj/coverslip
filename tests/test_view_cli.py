@@ -10,6 +10,7 @@ import tifffile
 
 from coverslip import view_cli, viewer
 from coverslip.cli import EXIT_ERROR, main
+from coverslip.model import Region
 
 from conftest import make_image, requires_sample, sample_path, write_pyramid
 
@@ -185,3 +186,77 @@ def test_view_without_matplotlib_is_a_one_line_error(
     assert error_line(capsys) == (
         "coverslip show: error: viewing needs matplotlib; install coverslip[view]"
     )
+
+
+def capture_level_view(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Record the LevelView that show builds, and let a fake run() use it."""
+    views: list = []
+    original = viewer.level_figure
+
+    def recording(*args, **kwargs):
+        views.append(original(*args, **kwargs))
+        return views[-1]
+
+    monkeypatch.setattr(viewer, "level_figure", recording)
+    return views
+
+
+def test_show_prints_redact_command_for_drawn_regions(
+    lzw_pyramid: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    views = capture_level_view(monkeypatch)
+
+    def draw_then_close() -> None:
+        views[0].add_region(Region(10, 20, 41, 40))
+
+    monkeypatch.setattr(viewer, "run", draw_then_close)
+    args = ["show", str(lzw_pyramid), "--level", "1", "-r", "1,1,5,5"]
+    assert main(args) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[-3:] == [
+        "-r 10,20,41,40@210x150",
+        "redact with:",
+        f"coverslip redact {lzw_pyramid} OUTPUT -r 1,1,5,5 -r 10,20,41,40@210x150",
+    ]
+
+
+def test_show_without_drawing_prints_no_command(
+    lzw_pyramid: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["show", str(lzw_pyramid)]) == 0
+    assert "redact with:" not in capsys.readouterr().out
+
+
+def test_show_previews_regions(
+    lzw_pyramid: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    views = capture_level_view(monkeypatch)
+    args = ["show", str(lzw_pyramid), "--level", "2", "-r", "10,20,41,40@210x150"]
+    assert main(args) == 0
+    # the region selector owns a (hidden) rectangle too; previews are dashed
+    [patch] = [p for p in views[0].ax.patches if p.get_linestyle() == "--"]
+    assert patch.get_xy() == (5, 10) and patch.get_width() == 21
+
+
+def test_show_region_outside_level_frame_is_an_error(
+    lzw_pyramid: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["show", str(lzw_pyramid), "-r", "1,1,5,5@99x99"]) == EXIT_ERROR
+    assert "No pyramid level is 99x99" in error_line(capsys)
+
+
+def test_show_region_with_label_is_an_error(
+    lzw_pyramid: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["show", str(lzw_pyramid), "--label", "-r", "1,1,5,5"]) == EXIT_ERROR
+    assert error_line(capsys) == (
+        "coverslip show: error: --region previews apply to pyramid levels, "
+        "not --label"
+    )
+
+
+def test_show_rejects_malformed_region(lzw_pyramid: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(["show", str(lzw_pyramid), "-r", "1,2,3"])

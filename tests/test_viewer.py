@@ -6,8 +6,10 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.testing.widgets import click_and_drag
 
 from coverslip import chunks, viewer
+from coverslip.model import Region
 
 from conftest import load_layout
 
@@ -144,3 +146,86 @@ def test_tile_opener_logs_empty_tile(
 def test_configure_matplotlib_frees_g() -> None:
     viewer.configure_matplotlib()
     assert "g" not in plt.rcParams["keymap.grid"]
+
+
+def drawing_view(path: Path, messages: list) -> viewer.LevelView:
+    full, half, _ = load_layout(path).images[0].levels
+    array = chunks.read_level(str(path), half)
+    level = viewer.level_figure(
+        array,
+        half,
+        "half",
+        tiles=full,
+        open_tile=lambda c, r: messages.append(("tile", c, r)),
+        draw_regions=True,
+        report=messages.append,
+    )
+    level.figure.canvas.draw()
+    return level
+
+
+def test_drag_draws_region_only_in_region_mode(lzw_pyramid: Path) -> None:
+    messages: list = []
+    level = drawing_view(lzw_pyramid, messages)
+    click_and_drag(level.selector, start=(10.2, 20.5), end=(50.7, 60))
+    assert level.regions == []
+    level.on_key(SimpleNamespace(key="r"))
+    assert level.region_mode and "drawing regions" in level.ax.get_title()
+    click_and_drag(level.selector, start=(10.2, 20.5), end=(50.7, 60))
+    assert level.regions == [Region(10, 20, 41, 40)]
+    assert messages[-1] == "-r 10,20,41,40@210x150"
+    assert level.region_args() == ["10,20,41,40@210x150"]
+    assert len(level.region_patches) == 1
+
+
+def test_clicks_do_not_open_tiles_in_region_mode(lzw_pyramid: Path) -> None:
+    messages: list = []
+    level = drawing_view(lzw_pyramid, messages)
+    level.toggle_region_mode()
+    level.on_click(click(level.ax, 40, 20))
+    assert messages == []
+    level.toggle_region_mode()
+    assert level.ax.get_title() == "half"
+    level.on_click(click(level.ax, 40, 20))
+    assert messages == [("tile", 1, 0)]
+
+
+def test_undo_removes_last_region(lzw_pyramid: Path) -> None:
+    messages: list = []
+    level = drawing_view(lzw_pyramid, messages)
+    level.add_region(Region(1, 2, 3, 4))
+    level.add_region(Region(5, 6, 7, 8))
+    patch = level.region_patches[-1]
+    level.on_key(SimpleNamespace(key="u"))
+    assert level.regions == [Region(1, 2, 3, 4)]
+    assert patch not in level.ax.patches
+    assert messages[-1] == "removed -r 5,6,7,8@210x150"
+    level.undo_region()
+    level.undo_region()
+    assert level.regions == []
+
+
+def test_region_keys_ignored_without_drawing(lzw_pyramid: Path) -> None:
+    half = load_layout(lzw_pyramid).images[0].levels[1]
+    level = viewer.level_figure(chunks.read_level(str(lzw_pyramid), half), half, "h")
+    level.on_key(SimpleNamespace(key="r"))
+    assert level.selector is None and not level.region_mode
+
+
+def test_preview_regions_are_drawn(lzw_pyramid: Path) -> None:
+    half = load_layout(lzw_pyramid).images[0].levels[1]
+    level = viewer.level_figure(
+        chunks.read_level(str(lzw_pyramid), half),
+        half,
+        "h",
+        preview=[Region(1, 2, 3, 4), Region(10, 10, 5, 5)],
+    )
+    assert [p.get_linestyle() for p in level.ax.patches] == ["--", "--"]
+    assert level.regions == []
+
+
+def test_configure_matplotlib_frees_r_and_u() -> None:
+    viewer.configure_matplotlib()
+    for name, keys in plt.rcParams.items():
+        if name.startswith("keymap."):
+            assert not {"g", "r", "u"} & set(keys), name

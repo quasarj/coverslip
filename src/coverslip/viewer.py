@@ -3,12 +3,16 @@
 Figures are built from arrays and layout objects, and clicks call an injected
 ``open_tile(col, row)`` callback, so everything here also works (and is
 tested) under the non-interactive Agg backend. Only :func:`run` blocks.
+
+The level view can also draw redaction regions: ``r`` switches dragging from
+"open a tile" to "draw a rectangle", and each rectangle is reported as the
+``-r`` argument ``redact`` takes.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,28 +23,37 @@ from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 from matplotlib.patches import Rectangle
+from matplotlib.widgets import RectangleSelector
 
 from coverslip import chunks, gridmap
 from coverslip.codecs.pixel import UnsupportedCodec
-from coverslip.model import ImageIFD
+from coverslip.model import ImageIFD, Region
+from coverslip.regions import region_arg, region_from_drag
 
 logger = logging.getLogger(__name__)
 
 OpenTile = Callable[[int, int], None]
+Report = Callable[[str], None]
 
 MAX_FIGURE_INCHES = 12.0
 GRID_ALPHA = 0.45
 GRID_CMAP = "viridis"
 EMPTY_TILE_COLOUR = "red"
 OPENED_TILE_COLOUR = "yellow"
+REGION_COLOUR = "red"
+PREVIEW_COLOUR = "orange"
 TOGGLE_GRID_KEY = "g"
+TOGGLE_REGION_KEY = "r"
+UNDO_REGION_KEY = "u"
+OUR_KEYS = (TOGGLE_GRID_KEY, TOGGLE_REGION_KEY, UNDO_REGION_KEY)
+REGION_MODE_HINT = "\ndrawing regions: drag to add, u undoes, r stops"
 
 
 def configure_matplotlib() -> None:
-    """Free ``g`` (matplotlib toggles axis gridlines with it) for the grid map."""
-    plt.rcParams["keymap.grid"] = [
-        key for key in plt.rcParams["keymap.grid"] if key != TOGGLE_GRID_KEY
-    ]
+    """Take our keys back from matplotlib's defaults (g: gridlines, r: home)."""
+    for name, keys in plt.rcParams.items():
+        if name.startswith("keymap."):
+            plt.rcParams[name] = [key for key in keys if key not in OUR_KEYS]
 
 
 def run() -> None:
@@ -103,16 +116,23 @@ def is_plain_click(event: Any, ax: Axes) -> bool:
 
 @dataclass
 class LevelView:
-    """A whole level, optionally clickable to open tiles of a ``tiles`` level."""
+    """A whole level, optionally clickable to open tiles of a ``tiles`` level,
+    and optionally a canvas for drawing redaction regions."""
 
     figure: Figure
     ax: Axes
     view: ImageIFD
     tiles: ImageIFD | None
     open_tile: OpenTile | None
+    title: str = ""
+    report: Report = print
     byte_counts: np.ndarray | None = None
     overlay: AxesImage | None = None
     opened: set[tuple[int, int]] = field(default_factory=set)
+    selector: RectangleSelector | None = None
+    region_mode: bool = False
+    regions: list[Region] = field(default_factory=list)
+    region_patches: list[Rectangle] = field(default_factory=list)
 
     def toggle_grid(self) -> None:
         if self.overlay is None:
@@ -136,8 +156,48 @@ class LevelView:
         self.ax.add_patch(box)
         self.figure.canvas.draw_idle()
 
+    def toggle_region_mode(self) -> None:
+        if self.selector is None:
+            return
+        self.region_mode = not self.region_mode
+        self.selector.set_active(self.region_mode)
+        hint = REGION_MODE_HINT if self.region_mode else ""
+        self.ax.set_title(self.title + hint)
+        self.figure.canvas.draw_idle()
+
+    def on_select(self, press: Any, release: Any) -> None:
+        if None in (press.xdata, press.ydata, release.xdata, release.ydata):
+            return
+        region = region_from_drag(
+            self.view, press.xdata, press.ydata, release.xdata, release.ydata
+        )
+        if region is not None:
+            self.add_region(region)
+
+    def add_region(self, region: Region) -> None:
+        patch = _region_patch(region, REGION_COLOUR, "-")
+        self.ax.add_patch(patch)
+        self.regions.append(region)
+        self.region_patches.append(patch)
+        self.report(f"-r {region_arg(region, self.view)}")
+        self.figure.canvas.draw_idle()
+
+    def undo_region(self) -> None:
+        if not self.regions:
+            return
+        region = self.regions.pop()
+        self.region_patches.pop().remove()
+        self.report(f"removed -r {region_arg(region, self.view)}")
+        self.figure.canvas.draw_idle()
+
+    def add_preview(self, region: Region) -> None:
+        self.ax.add_patch(_region_patch(region, PREVIEW_COLOUR, "--"))
+
+    def region_args(self) -> list[str]:
+        return [region_arg(region, self.view) for region in self.regions]
+
     def on_click(self, event: Any) -> None:
-        if self.tiles is None or self.open_tile is None:
+        if self.tiles is None or self.open_tile is None or self.region_mode:
             return
         if not is_plain_click(event, self.ax):
             return
@@ -150,6 +210,10 @@ class LevelView:
     def on_key(self, event: Any) -> None:
         if event.key == TOGGLE_GRID_KEY:
             self.toggle_grid()
+        elif event.key == TOGGLE_REGION_KEY:
+            self.toggle_region_mode()
+        elif event.key == UNDO_REGION_KEY:
+            self.undo_region()
 
     def format_coord(self, x: float, y: float) -> str:
         text = f"x={x:.0f} y={y:.0f}"
@@ -161,6 +225,32 @@ class LevelView:
         col, row = tile
         stored = self.byte_counts[row, col]
         return f"{text}  tile ({col},{row})  {stored:,} bytes"
+
+
+def _region_patch(region: Region, colour: str, linestyle: str) -> Rectangle:
+    return Rectangle(
+        (region.x, region.y),
+        region.width,
+        region.height,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.35,
+        linestyle=linestyle,
+        linewidth=2,
+    )
+
+
+def _add_region_selector(level: LevelView) -> None:
+    level.selector = RectangleSelector(
+        level.ax,
+        level.on_select,
+        useblit=True,
+        button=[1],
+        props={"edgecolor": REGION_COLOUR, "fill": False, "linewidth": 2},
+        # the selector rotates with "r" by default; that key toggles the mode
+        state_modifier_keys={"rotate": "ctrl+alt+r"},
+    )
+    level.selector.set_active(False)
 
 
 def _add_grid_overlay(ax: Axes, view: ImageIFD, tiles: ImageIFD) -> AxesImage:
@@ -185,11 +275,17 @@ def level_figure(
     tiles: ImageIFD | None = None,
     open_tile: OpenTile | None = None,
     show_grid: bool = False,
+    draw_regions: bool = False,
+    preview: Sequence[Region] = (),
+    report: Report = print,
 ) -> LevelView:
     """A window showing a whole level.
 
     With ``tiles``, hovering reports the tile of that level under the cursor,
     ``g`` toggles its byte-count map and a left click calls ``open_tile``.
+    With ``draw_regions``, ``r`` toggles region drawing; each rectangle drawn
+    (or undone with ``u``) is passed to ``report`` as a ``-r`` argument.
+    ``preview`` regions, in level pixels, are drawn dashed.
     """
     figure = plt.figure(figsize=figsize_for(view.width, view.height))
     figure.canvas.manager.set_window_title(title)
@@ -201,11 +297,15 @@ def level_figure(
         display, cmap=_gray_or_none(display), extent=(0, view.width, view.height, 0)
     )
     ax.set_title(title)
-    level = LevelView(figure, ax, view, tiles, open_tile)
+    level = LevelView(figure, ax, view, tiles, open_tile, title, report)
     if tiles is not None:
         level.byte_counts = gridmap.byte_grid(tiles)
         level.overlay = _add_grid_overlay(ax, view, tiles)
         level.overlay.set_visible(show_grid)
+    for region in preview:
+        level.add_preview(region)
+    if draw_regions:
+        _add_region_selector(level)
     ax.format_coord = level.format_coord
     figure.canvas.mpl_connect("button_press_event", level.on_click)
     figure.canvas.mpl_connect("key_press_event", level.on_key)
