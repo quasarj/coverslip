@@ -22,7 +22,10 @@ from coverslip.model import Layout
 
 ShowEntry = Callable[[LayoutEntry, Sequence[str]], list[str]]
 """Opens one row in the viewer, previewing the regions given, and returns the
-regions drawn in it once its windows are closed."""
+regions drawn in it once its windows are closed.
+
+It must leave no window behind: the browser keeps running afterwards and
+never runs a GUI event loop itself (see ``view_cli.show_entry_in_child``)."""
 
 DROP_COLUMN = "drop"
 DROP_MARK = Text("drop", style="bold red")

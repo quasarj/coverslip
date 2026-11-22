@@ -234,7 +234,7 @@ def cmd_browse(args: argparse.Namespace) -> int:
     if not _is_interactive():
         print(info.format_report(layout))
         return 0
-    show = partial(view_cli.show_entry, args.path, layout)
+    show = partial(view_cli.show_entry_in_child, args.path, layout)
     plan = browse.load_tui().run_browser(layout, show, EXPECTED_ERRORS)
     line = browse.command(plan) if plan is not None else None
     if line is not None:

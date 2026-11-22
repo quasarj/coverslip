@@ -9,6 +9,7 @@ import tifffile
 
 from coverslip import info, view_cli, viewer
 from coverslip.cli import EXIT_ERROR, main
+from coverslip.geometry import RegionFrameError
 from coverslip.model import Region
 
 from conftest import (
@@ -273,3 +274,25 @@ def test_show_entry_opens_an_associated_image(tmp_path: Path) -> None:
     entries = {entry.name: entry for entry in info.layout_entries(layout)}
     assert view_cli.show_entry(str(path), layout, entries["macro"]) == []
     assert figure_titles() == ["src.svs  macro  120x50"]
+
+
+def test_show_entry_in_child_returns_what_the_child_drew(
+    lzw_pyramid: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the child is a fresh interpreter: it sees the environment, not the
+    # patches of this process, so give it a backend that opens no window
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    layout = load_layout(lzw_pyramid)
+    entry = info.layout_entries(layout)[1]
+    assert view_cli.show_entry_in_child(str(lzw_pyramid), layout, entry) == []
+    assert plt.get_fignums() == []
+
+
+def test_show_entry_in_child_raises_the_childs_error(
+    lzw_pyramid: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    layout = load_layout(lzw_pyramid)
+    entry = info.layout_entries(layout)[0]
+    with pytest.raises(RegionFrameError, match="No pyramid level is 7x7"):
+        view_cli.show_entry_in_child(str(lzw_pyramid), layout, entry, ["1,1,2,2@7x7"])

@@ -10,7 +10,10 @@ from __future__ import annotations
 import argparse
 import importlib
 import logging
+import multiprocessing
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -35,11 +38,16 @@ class ViewerUnavailableError(Exception):
     """matplotlib is not installed."""
 
 
+class ViewerCrashedError(Exception):
+    """The process running the viewer died before reporting back."""
+
+
 VIEW_ERRORS: tuple[type[Exception], ...] = (
     chunks.EmptyChunkError,
     chunks.LevelTooLargeError,
     chunks.TileIndexError,
     SelectionError,
+    ViewerCrashedError,
     ViewerUnavailableError,
 )
 """Expected failures of the viewing commands, on top of the main CLI's."""
@@ -314,6 +322,31 @@ def show_entry(
     )
     viewer.run()
     return level.region_args()
+
+
+def show_entry_in_child(
+    path: str, layout: Layout, entry: LayoutEntry, region_texts: Sequence[str] = ()
+) -> list[str]:
+    """:func:`show_entry` in a process of its own, for a caller that lives on.
+
+    A GUI backend only finishes closing a window while its event loop runs.
+    Once ``plt.show()`` has returned nothing runs it, so in a process that
+    keeps going (the browser) a closed window stays on screen, dead, and
+    comes back with the next one; the macOS backend does exactly that. A
+    child process takes its windows with it when it exits, whatever the
+    backend. Errors raised in the child are raised here.
+    """
+    # spawn, not fork: the browser's process has threads and a terminal
+    # driver a forked copy must not share
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=1, mp_context=context) as pool:
+        future = pool.submit(show_entry, path, layout, entry, list(region_texts))
+        try:
+            return future.result()
+        except BrokenProcessPool as exc:
+            raise ViewerCrashedError(
+                f"the viewer for {entry.name} exited unexpectedly"
+            ) from exc
 
 
 def cmd_show(args: argparse.Namespace) -> int:
