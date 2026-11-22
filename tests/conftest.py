@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import glob
+import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import matplotlib
@@ -80,6 +82,15 @@ def write_pyramid(
             reduced = downsample(image, 2**i)
             writer.write(reduced, subfiletype=1, **kwargs)
     return path
+
+
+@pytest.fixture(autouse=True)
+def restore_layout_log_level() -> Iterator[None]:
+    """main() quiets coverslip.layout; don't let that leak into other tests."""
+    layout_logger = logging.getLogger("coverslip.layout")
+    level = layout_logger.level
+    yield
+    layout_logger.setLevel(level)
 
 
 @pytest.fixture

@@ -1,4 +1,3 @@
-import logging
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -8,11 +7,18 @@ import matplotlib.pyplot as plt
 import pytest
 import tifffile
 
-from coverslip import view_cli, viewer
+from coverslip import info, view_cli, viewer
 from coverslip.cli import EXIT_ERROR, main
 from coverslip.model import Region
 
-from conftest import make_image, requires_sample, sample_path, write_pyramid
+from conftest import (
+    load_layout,
+    make_image,
+    requires_sample,
+    sample_path,
+    write_pyramid,
+)
+from test_inplace import write_aperio_like
 
 
 @pytest.fixture(autouse=True)
@@ -20,15 +26,6 @@ def no_windows(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(viewer, "run", lambda: None)
     yield
     plt.close("all")
-
-
-@pytest.fixture(autouse=True)
-def restore_layout_log_level() -> Iterator[None]:
-    """main() quiets coverslip.layout; don't let that leak into other tests."""
-    layout_logger = logging.getLogger("coverslip.layout")
-    level = layout_logger.level
-    yield
-    layout_logger.setLevel(level)
 
 
 def error_line(capsys: pytest.CaptureFixture[str]) -> str:
@@ -260,3 +257,19 @@ def test_show_region_with_label_is_an_error(
 def test_show_rejects_malformed_region(lzw_pyramid: Path) -> None:
     with pytest.raises(SystemExit):
         main(["show", str(lzw_pyramid), "-r", "1,2,3"])
+
+
+def test_show_entry_opens_the_level_of_that_row(lzw_pyramid: Path) -> None:
+    layout = load_layout(lzw_pyramid)
+    entry = info.layout_entries(layout)[1]
+    drawn = view_cli.show_entry(str(lzw_pyramid), layout, entry, ["10,10,40,40"])
+    assert drawn == []
+    assert figure_titles() == ["lzw.tif  level 1  210x150"]
+
+
+def test_show_entry_opens_an_associated_image(tmp_path: Path) -> None:
+    path = write_aperio_like(tmp_path / "src.svs")
+    layout = load_layout(path)
+    entries = {entry.name: entry for entry in info.layout_entries(layout)}
+    assert view_cli.show_entry(str(path), layout, entries["macro"]) == []
+    assert figure_titles() == ["src.svs  macro  120x50"]

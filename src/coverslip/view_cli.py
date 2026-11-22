@@ -10,12 +10,18 @@ from __future__ import annotations
 import argparse
 import importlib
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 from coverslip import chunks, gridmap, regions
 from coverslip import layout as layout_mod
+from coverslip.info import LayoutEntry
 from coverslip.model import ImageIFD, Layout, PyramidImage, RegionSpec, Role
+
+if TYPE_CHECKING:
+    from coverslip.viewer import LevelView
 
 DEFAULT_VIEW_SIDE = 1000
 """``show`` picks the smallest level whose long side is at least this."""
@@ -225,39 +231,86 @@ def window_title(path: str, what: str, ifd: ImageIFD) -> str:
     return f"{Path(path).name}  {what}  {ifd.width}x{ifd.height}"
 
 
-def _show_associated(args: argparse.Namespace, layout: Layout, role: Role) -> None:
+def open_associated(path: str, ifd: ImageIFD, what: str, force: bool = False) -> None:
+    """Open a window on an image that belongs to no pyramid."""
     viewer = load_viewer()
-    ifd = select_associated(layout, role)
-    max_pixels = None if args.force else chunks.DEFAULT_MAX_PIXELS
-    array = chunks.read_level(args.path, ifd, max_pixels)
-    viewer.level_figure(array, ifd, window_title(args.path, role.value, ifd))
+    max_pixels = None if force else chunks.DEFAULT_MAX_PIXELS
+    array = chunks.read_level(path, ifd, max_pixels)
+    viewer.level_figure(array, ifd, window_title(path, what, ifd))
+
+
+def open_level(
+    path: str,
+    layout: Layout,
+    image: PyramidImage,
+    n: int,
+    *,
+    tile_level: int = 0,
+    region_texts: Sequence[str] = (),
+    show_grid: bool = False,
+    force: bool = False,
+) -> LevelView:
+    """Open a window on pyramid level ``n``, previewing ``region_texts``."""
+    viewer = load_viewer()
+    view = select_level(image, n)
+    tiles = select_level(image, tile_level)
+    specs = [RegionSpec.parse(text) for text in region_texts]
+    preview = regions.preview_on_level(layout, image.full, view, specs)
+    max_pixels = None if force else chunks.DEFAULT_MAX_PIXELS
+    array = chunks.read_level(path, view, max_pixels)
+    print(
+        f"showing level {n} ({view.width}x{view.height}); click to open level "
+        f"{tile_level} tiles, g toggles the byte-count map, r draws "
+        "redaction regions"
+    )
+    return viewer.level_figure(
+        array,
+        view,
+        window_title(path, f"level {n}", view),
+        tiles=tiles,
+        open_tile=viewer.tile_opener(path, tiles, str(tile_level)),
+        show_grid=show_grid,
+        draw_regions=True,
+        preview=preview,
+    )
 
 
 def _show_level(args: argparse.Namespace, layout: Layout) -> list[str]:
     """Show a pyramid level; return the regions drawn, as ``-r`` arguments."""
-    viewer = load_viewer()
     image = select_image(layout, args.image)
     n = args.level if args.level is not None else default_view_level(image)
-    view = select_level(image, n)
-    tiles = select_level(image, args.tile_level)
-    specs = [RegionSpec.parse(text) for text in args.region]
-    preview = regions.preview_on_level(layout, image.full, view, specs)
-    max_pixels = None if args.force else chunks.DEFAULT_MAX_PIXELS
-    array = chunks.read_level(args.path, view, max_pixels)
-    print(
-        f"showing level {n} ({view.width}x{view.height}); click to open level "
-        f"{args.tile_level} tiles, g toggles the byte-count map, r draws "
-        "redaction regions"
-    )
-    level = viewer.level_figure(
-        array,
-        view,
-        window_title(args.path, f"level {n}", view),
-        tiles=tiles,
-        open_tile=viewer.tile_opener(args.path, tiles, str(args.tile_level)),
+    level = open_level(
+        args.path,
+        layout,
+        image,
+        n,
+        tile_level=args.tile_level,
+        region_texts=args.region,
         show_grid=args.grid,
-        draw_regions=True,
-        preview=preview,
+        force=args.force,
+    )
+    load_viewer().run()
+    return level.region_args()
+
+
+def show_entry(
+    path: str, layout: Layout, entry: LayoutEntry, region_texts: Sequence[str] = ()
+) -> list[str]:
+    """Show one row of the inspect report and block until its windows close.
+
+    A pyramid level previews ``region_texts`` and returns the regions drawn
+    on it, as ``-r`` arguments. An associated image returns none: regions
+    are in slide coordinates, which it does not share.
+    """
+    viewer = load_viewer()
+    viewer.configure_matplotlib()
+    if entry.image_index is None or entry.level_index is None:
+        open_associated(path, entry.ifd, entry.name)
+        viewer.run()
+        return []
+    image = layout.images[entry.image_index]
+    level = open_level(
+        path, layout, image, entry.level_index, region_texts=region_texts
     )
     viewer.run()
     return level.region_args()
@@ -273,7 +326,8 @@ def cmd_show(args: argparse.Namespace) -> int:
             raise SelectionError(
                 f"--region previews apply to pyramid levels, not --{associated.value}"
             )
-        _show_associated(args, layout, associated)
+        ifd = select_associated(layout, associated)
+        open_associated(args.path, ifd, associated.value, args.force)
         viewer.run()
         return 0
     drawn = _show_level(args, layout)

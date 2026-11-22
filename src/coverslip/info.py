@@ -67,13 +67,32 @@ def summarize(name: str, ifd: ImageIFD, full: ImageIFD | None) -> LevelSummary:
     )
 
 
-def summarize_layout(layout: Layout) -> list[LevelSummary]:
-    """Pyramid levels first (named ``N`` or ``iM.N``), then associated images."""
-    rows: list[LevelSummary] = []
+@dataclass(frozen=True)
+class LayoutEntry:
+    """One image of a slide, under the name the report gives it.
+
+    ``image_index`` and ``level_index`` place a pyramid level; both are
+    ``None`` for an associated image, which belongs to no pyramid.
+    """
+
+    name: str
+    ifd: ImageIFD
+    full: ImageIFD | None
+    image_index: int | None = None
+    level_index: int | None = None
+
+
+def _level_entries(layout: Layout) -> list[LayoutEntry]:
+    entries = []
     for m, image in enumerate(layout.images):
         for n, level in enumerate(image.levels):
             name = str(n) if len(layout.images) == 1 else f"i{m}.{n}"
-            rows.append(summarize(name, level, image.full))
+            entries.append(LayoutEntry(name, level, image.full, m, n))
+    return entries
+
+
+def _associated_entries(layout: Layout) -> list[LayoutEntry]:
+    entries = []
     for group_name, group in (
         ("label", layout.label),
         ("macro", layout.macro),
@@ -81,8 +100,21 @@ def summarize_layout(layout: Layout) -> list[LevelSummary]:
     ):
         for k, ifd in enumerate(group):
             name = group_name if len(group) == 1 else f"{group_name}{k}"
-            rows.append(summarize(name, ifd, None))
-    return rows
+            entries.append(LayoutEntry(name, ifd, None))
+    return entries
+
+
+def layout_entries(layout: Layout) -> list[LayoutEntry]:
+    """Pyramid levels first (named ``N`` or ``iM.N``), then associated images."""
+    return _level_entries(layout) + _associated_entries(layout)
+
+
+def summarize_entry(entry: LayoutEntry) -> LevelSummary:
+    return summarize(entry.name, entry.ifd, entry.full)
+
+
+def summarize_layout(layout: Layout) -> list[LevelSummary]:
+    return [summarize_entry(entry) for entry in layout_entries(layout)]
 
 
 def human_bytes(count: int) -> str:
@@ -94,7 +126,7 @@ def human_bytes(count: int) -> str:
     raise AssertionError("unreachable")
 
 
-def _row_cells(row: LevelSummary) -> list[str]:
+def row_cells(row: LevelSummary) -> list[str]:
     kind = "tile" if row.tiled else "strip"
     return [
         row.name,
@@ -134,14 +166,11 @@ def format_table(rows: list[list[str]]) -> str:
     return "\n".join(line.rstrip() for line in lines)
 
 
-def format_report(layout: Layout) -> str:
+def format_line(layout: Layout) -> str:
     container = "BigTIFF" if layout.bigtiff else "classic TIFF"
-    rows = [HEADER] + [_row_cells(r) for r in summarize_layout(layout)]
-    return "\n".join(
-        [
-            layout.path,
-            f"format: {container}  vendor: {layout.vendor}",
-            "",
-            format_table(rows),
-        ]
-    )
+    return f"format: {container}  vendor: {layout.vendor}"
+
+
+def format_report(layout: Layout) -> str:
+    rows = [HEADER] + [row_cells(r) for r in summarize_layout(layout)]
+    return "\n".join([layout.path, format_line(layout), "", format_table(rows)])
