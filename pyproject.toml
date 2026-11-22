@@ -18,6 +18,9 @@ dependencies = [
 view = [
     "matplotlib>=3.11.2",
 ]
+tui = [
+    "textual>=8.2.8",
+]
 
 [project.scripts]
 coverslip = "coverslip.cli:main"
@@ -34,7 +37,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
-    "coverslip[view]",
+    "coverslip[view,tui]",
     "openslide-bin>=4.0.1.2",
     "openslide-python>=1.4.7",
     "pytest>=9.2.0",

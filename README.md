@@ -3,6 +3,9 @@
 Inspect, view, redact and scrub whole-slide images (tiled TIFF / BigTIFF,
 Aperio SVS, OME-TIFF) from the command line.
 
+* **Browse.** `coverslip slide.svs` opens the slide's layout as a table in
+  the terminal. From there you open any image in a window and flag the label
+  and macro for removal, and coverslip prints the command that does it.
 * **Inspect and view.** Coverslip lists the pyramid levels and associated
   images, opens any level in a window, and opens single tiles of a large level
   by clicking on an overview. A heatmap of stored bytes per tile shows tissue,
@@ -24,13 +27,59 @@ Coverslip was formed from two earlier projects, tiffredact and tiffview.
 uv sync                       # everything, including the viewer and test tools
 uv pip install .              # headless: inspect, redact, scrub, verify
 uv pip install '.[view]'      # plus the viewer (show, tile, grid)
+uv pip install '.[view,tui]'  # plus the terminal browser
 ```
 
 Runtime dependencies: `tifffile`, `imagecodecs`, `jpeglib`, `tifftools`,
 `numpy`. The viewer also needs `matplotlib`, which is the optional `view`
 extra. Without it, `show`, `tile` and `grid` exit with a hint to install it,
-and everything else still works. OpenSlide (`openslide-python` +
+and everything else still works. The browser needs `textual`, the optional
+`tui` extra, and exits with the same kind of hint without it. OpenSlide (`openslide-python` +
 `openslide-bin`) is a dev dependency, used only by the test suite.
+
+## Browsing
+
+```sh
+uv run coverslip slide.svs           # short for: coverslip browse slide.svs
+```
+
+The browser shows the `inspect` table and lets you act on its rows:
+
+| key | action |
+|---|---|
+| up / down, `j` / `k` | move between images |
+| Enter | open the image in a `show` window; the browser waits until you close it |
+| `d` | flag or unflag a label or macro image for dropping |
+| `s` | turn metadata scrubbing on or off |
+| `p` | go back to the default profile |
+| `u` | forget the last region drawn |
+| `q` | quit and print the command |
+
+**Default profile.** The browser starts with metadata scrubbing on and, for an
+Aperio SVS, the label and macro flagged. The label usually shows the accession
+number and the macro photographs the whole slide, label included. Unflag
+either with `d`.
+
+**It only prints a command.** The browser never modifies a file. The line at
+the bottom shows the command your choices amount to, and `q` prints it:
+
+```
+redact with:
+coverslip scrub slide.svs OUTPUT --drop-label --drop-macro
+```
+
+Regions you draw in a window opened from the browser (press `r` there, see
+below) are kept, previewed in the next window you open, and added to the
+command, which then becomes `coverslip redact ... -r ...`.
+
+Limits:
+- Only label and macro images can be dropped. Pyramid levels, thumbnail
+  included, cannot, and neither can any image of an OME-TIFF.
+- `redact` does not drop images on their own, so with scrubbing off and no
+  region drawn there is no command to print.
+- Without a terminal (output piped or redirected), `coverslip slide.svs`
+  prints the `inspect` report instead.
+- Opening an image needs the `view` extra as well.
 
 ## Inspecting
 

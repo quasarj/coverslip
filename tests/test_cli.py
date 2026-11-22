@@ -1,9 +1,11 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from coverslip.cli import EXIT_ERROR, main
+from coverslip import browse, cli
+from coverslip.cli import EXIT_ERROR, main, with_default_command
 from coverslip.patches import PatchError
 
 from conftest import write_pyramid
@@ -82,3 +84,57 @@ def test_inspect_lists_levels_and_tags(
     assert "ImageWidth" not in out
     assert main(["inspect", str(src), "--tags"]) == 0
     assert "ImageWidth" in capsys.readouterr().out
+
+
+def test_a_bare_file_means_browse() -> None:
+    assert with_default_command(["slide.svs"]) == ["browse", "slide.svs"]
+    assert with_default_command(["-v", "slide.svs"]) == ["-v", "browse", "slide.svs"]
+
+
+def test_commands_and_options_are_left_alone() -> None:
+    assert with_default_command(["inspect", "slide.svs"]) == ["inspect", "slide.svs"]
+    assert with_default_command(["-v", "show", "a.svs"]) == ["-v", "show", "a.svs"]
+    assert with_default_command(["--version"]) == ["--version"]
+    assert with_default_command([]) == []
+
+
+def test_browse_without_a_terminal_prints_the_inspect_report(
+    tmp_path: Path, rgb_image: np.ndarray, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image)
+    assert main([str(src)]) == 0
+    browsed = capsys.readouterr().out
+    assert main(["inspect", str(src)]) == 0
+    assert browsed == capsys.readouterr().out
+
+
+def test_browse_prints_the_command_for_the_plan(
+    tmp_path: Path,
+    rgb_image: np.ndarray,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image)
+    plan = browse.Plan(str(src), scrub=True, regions=["1,2,3,4"])
+    fake_tui = SimpleNamespace(run_browser=lambda layout, show, errors: plan)
+    monkeypatch.setattr(cli, "_is_interactive", lambda: True)
+    monkeypatch.setattr(browse, "load_tui", lambda: fake_tui)
+    assert main(["browse", str(src)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "redact with:",
+        f"coverslip redact {src} OUTPUT -r 1,2,3,4 --scrub",
+    ]
+
+
+def test_browse_left_without_quitting_prints_nothing(
+    tmp_path: Path,
+    rgb_image: np.ndarray,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image)
+    fake_tui = SimpleNamespace(run_browser=lambda layout, show, errors: None)
+    monkeypatch.setattr(cli, "_is_interactive", lambda: True)
+    monkeypatch.setattr(browse, "load_tui", lambda: fake_tui)
+    assert main(["browse", str(src)]) == 0
+    assert capsys.readouterr().out == ""

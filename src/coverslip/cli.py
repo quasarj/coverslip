@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from functools import partial
 from typing import Any
 
 import tifftools
 
-from coverslip import __version__, info, view_cli
+from coverslip import __version__, browse, info, view_cli
 from coverslip import layout as layout_mod
 from coverslip.codecs.fill import UnsupportedFill
 from coverslip.codecs.jpeg_dct import JpegDctError
@@ -40,6 +41,7 @@ EXPECTED_ERRORS: tuple[type[Exception], ...] = (
     ScrubError,
     StorageError,
     tifftools.TifftoolsError,
+    browse.TuiUnavailableError,
     UnsupportedCodec,
     UnsupportedFill,
     VerifyError,
@@ -156,6 +158,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--tags", action="store_true", help="list every tag and what scrubbing would do"
     )
 
+    p_browse = sub.add_parser(
+        "browse",
+        help="browse the layout interactively: open images, flag label and "
+        "macro for dropping (the default when only a file is given)",
+    )
+    p_browse.add_argument("path")
+
     p_redact = sub.add_parser("redact", help="redact regions into a new file")
     p_redact.add_argument("input")
     p_redact.add_argument("output", nargs="?")
@@ -210,6 +219,25 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     if args.tags:
         print()
         print(describe_tags(raw))
+    return 0
+
+
+def _is_interactive() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def cmd_browse(args: argparse.Namespace) -> int:
+    """Open the browser; without a terminal, print the inspect report."""
+    layout = view_cli.load(args.path, args.verbose)
+    if not _is_interactive():
+        print(info.format_report(layout))
+        return 0
+    show = partial(view_cli.show_entry, args.path, layout)
+    plan = browse.load_tui().run_browser(layout, show, EXPECTED_ERRORS)
+    line = browse.command(plan) if plan is not None else None
+    if line is not None:
+        print("redact with:")
+        print(line)
     return 0
 
 
@@ -291,22 +319,41 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+HANDLERS = {
+    "browse": cmd_browse,
+    "inspect": cmd_inspect,
+    "redact": cmd_redact,
+    "scrub": cmd_scrub,
+    "verify": cmd_verify,
+    **view_cli.HANDLERS,
+}
+
+
+def with_default_command(argv: list[str]) -> list[str]:
+    """``coverslip FILE`` is short for ``coverslip browse FILE``.
+
+    The first word that is not an option names the command; anything that is
+    not a command is taken to be the file.
+    """
+    for position, word in enumerate(argv):
+        if word.startswith("-"):
+            continue
+        if word in HANDLERS:
+            return argv
+        return [*argv[:position], "browse", *argv[position:]]
+    return argv
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    words = sys.argv[1:] if argv is None else argv
+    args = parser.parse_args(with_default_command(words))
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    handlers = {
-        "inspect": cmd_inspect,
-        "redact": cmd_redact,
-        "scrub": cmd_scrub,
-        "verify": cmd_verify,
-        **view_cli.HANDLERS,
-    }
     try:
-        return handlers[args.command](args)
+        return HANDLERS[args.command](args)
     except EXPECTED_ERRORS as exc:
         return _report_error(args.command, exc)
 
