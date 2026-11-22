@@ -101,11 +101,9 @@ def test_nothing_flagged_has_no_command() -> None:
     assert browse.describe(plan) == browse.NOTHING_TO_DO
 
 
-def test_drops_alone_have_no_command() -> None:
-    """redact refuses to drop images without scrubbing or a region."""
+def test_drops_alone_are_a_redact_command() -> None:
     plan = Plan("slide.svs", drop={Role.MACRO})
-    assert browse.command(plan) is None
-    assert browse.describe(plan) == browse.DROP_NEEDS_MORE
+    assert browse.command(plan) == "coverslip redact slide.svs OUTPUT --drop-macro"
 
 
 def test_missing_textual_is_explained(monkeypatch: pytest.MonkeyPatch) -> None:

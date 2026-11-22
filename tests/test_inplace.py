@@ -249,6 +249,20 @@ def test_drop_label_and_macro_in_place(tmp_path: Path) -> None:
     assert_matches_full_rewrite(src, target, regions=[region], **options)
 
 
+def test_drop_label_and_macro_alone_in_place(tmp_path: Path) -> None:
+    src = write_aperio_like(tmp_path / "src.svs")
+    target = in_place_copy(src, "inplace.svs")
+    options = {"drop_label": True, "drop_macro": True}
+    report = redact_in_place(str(target), [], **options)
+    assert len(report.dropped) == 2
+    with tifffile.TiffFile(target) as tf:
+        assert [page.shape for page in tf.pages] == [(256, 384, 3), (64, 96, 3)]
+        assert "Filename" in tf.pages[0].description
+    audit = verify_in_place(str(target))
+    assert audit.ok, audit.summary()
+    assert_matches_full_rewrite(src, target, regions=[], **options)
+
+
 def test_deduplicated_tiles_are_not_clobbered(tmp_path: Path) -> None:
     """Tiles that share one slot: redacting one must leave the others intact."""
     flat = np.full((128, 256, 3), 90, np.uint8)

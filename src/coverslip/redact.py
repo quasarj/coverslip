@@ -153,8 +153,10 @@ def load_plan(
     Also returns the regions in full-resolution coordinates, which is the form
     reports and manifests record.
     """
-    if not regions and not scrub:
-        raise RedactionError("At least one region is required unless scrubbing")
+    if not (regions or scrub or drop_label or drop_macro):
+        raise RedactionError(
+            "Nothing to do: give a region, scrub, or drop the label or macro"
+        )
     info = layout_mod.read_info(input_path)
     layout = layout_mod.discover(info)
     if (drop_label or drop_macro) and layout.vendor == "ome":
@@ -246,8 +248,8 @@ def redact_file(
     A bare :class:`Region` is in full-resolution coordinates; a
     :class:`RegionSpec` may name the pyramid level it was drawn on.
 
-    With ``scrub`` the metadata is cleaned as well; ``regions`` may then be
-    empty for a metadata-only rewrite.
+    With ``scrub`` the metadata is cleaned as well. ``regions`` may be empty
+    when scrubbing or dropping the label or macro is the whole job.
     """
     info, layout, resolved, work = load_plan(
         input_path, regions, scrub, drop_label, drop_macro

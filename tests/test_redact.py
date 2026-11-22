@@ -15,6 +15,7 @@ from conftest import (
     sample_svs_paths,
     write_pyramid,
 )
+from test_inplace import write_aperio_like
 
 REGION = Region(100, 50, 120, 90)
 
@@ -231,3 +232,23 @@ def test_planar_separate_pyramid(
             assert np.abs(window - np.array([200, 30, 90])).max() <= tolerance
     audit = verify_file(str(src), str(out), [region], fill=(200, 30, 90))
     assert audit.ok, audit.summary()
+
+
+def test_dropping_label_and_macro_is_a_job_on_its_own(tmp_path: Path) -> None:
+    src = write_aperio_like(tmp_path / "src.svs")
+    out = tmp_path / "out.svs"
+    report = redact_file(str(src), str(out), [], drop_label=True, drop_macro=True)
+    assert len(report.dropped) == 2
+    assert report.chunks_redacted == 0 and report.scrub is None
+    with tifffile.TiffFile(src) as before, tifffile.TiffFile(out) as after:
+        assert [page.shape for page in after.pages] == [(256, 384, 3), (64, 96, 3)]
+        assert after.pages[0].description == before.pages[0].description
+        assert np.array_equal(after.pages[0].asarray(), before.pages[0].asarray())
+    audit = verify_file(str(src), str(out), [])
+    assert audit.ok, audit.summary()
+
+
+def test_nothing_to_do_is_refused(tmp_path: Path) -> None:
+    src = write_aperio_like(tmp_path / "src.svs")
+    with pytest.raises(RedactionError, match="Nothing to do"):
+        redact_file(str(src), str(tmp_path / "out.svs"), [])

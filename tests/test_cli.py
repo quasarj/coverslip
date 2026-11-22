@@ -9,6 +9,7 @@ from coverslip.cli import EXIT_ERROR, main, with_default_command
 from coverslip.patches import PatchError
 
 from conftest import write_pyramid
+from test_inplace import write_aperio_like
 
 
 def error_line(capsys: pytest.CaptureFixture[str]) -> str:
@@ -138,3 +139,21 @@ def test_browse_left_without_quitting_prints_nothing(
     monkeypatch.setattr(browse, "load_tui", lambda: fake_tui)
     assert main(["browse", str(src)]) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_redact_with_nothing_to_do_is_refused(
+    tmp_path: Path, rgb_image: np.ndarray
+) -> None:
+    src = write_pyramid(tmp_path / "src.tif", rgb_image)
+    with pytest.raises(SystemExit, match="nothing to do"):
+        main(["redact", str(src), str(tmp_path / "out.tif")])
+
+
+def test_redact_accepts_a_drop_flag_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = write_aperio_like(tmp_path / "src.svs")
+    out = tmp_path / "out.svs"
+    assert main(["redact", str(src), str(out), "--drop-macro"]) == 0
+    assert "dropped macro" in capsys.readouterr().out
+    assert main(["verify", str(src), str(out)]) == 0

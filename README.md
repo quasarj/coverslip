@@ -75,8 +75,8 @@ command, which then becomes `coverslip redact ... -r ...`.
 Limits:
 - Only label and macro images can be dropped. Pyramid levels, thumbnail
   included, cannot, and neither can any image of an OME-TIFF.
-- `redact` does not drop images on their own, so with scrubbing off and no
-  region drawn there is no command to print.
+- With scrubbing off and nothing flagged or drawn, there is no command to
+  print.
 - Without a terminal (output piped or redirected), `coverslip slide.svs`
   prints the `inspect` report instead.
 - Opening an image needs the `view` extra as well.
@@ -202,6 +202,10 @@ uv run coverslip verify slide.svs clean.svs --scrubbed
 
 # both at once
 uv run coverslip redact slide.svs clean.svs -r 5000,4000,3000,2000 --scrub
+
+# only remove the label and macro images; pixels and metadata stay
+uv run coverslip redact slide.svs nolabel.svs --drop-label --drop-macro
+uv run coverslip verify slide.svs nolabel.svs
 ```
 
 Options for `redact`:
@@ -210,7 +214,7 @@ Options for `redact`:
 |---|---|
 | `-r/--region X,Y,W,H[@WxH]` | rectangle at full resolution, or on the level that is `WxH` pixels; repeatable |
 | `--fill R,G,B` | fill colour, default black |
-| `--drop-label` / `--drop-macro` | remove the Aperio label / macro IFDs |
+| `--drop-label` / `--drop-macro` | remove the Aperio label / macro IFDs; enough on their own, without a region |
 | `--no-dct` | re-encode JPEG chunks in the pixel domain instead of editing DCT blocks |
 | `--overwrite` | replace an existing output file |
 | `--scrub` | also scrub identifying metadata (see below) |

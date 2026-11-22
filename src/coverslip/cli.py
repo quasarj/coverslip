@@ -165,7 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_browse.add_argument("path")
 
-    p_redact = sub.add_parser("redact", help="redact regions into a new file")
+    p_redact = sub.add_parser(
+        "redact", help="redact regions, or drop label/macro images, into a new file"
+    )
     p_redact.add_argument("input")
     p_redact.add_argument("output", nargs="?")
     _add_in_place(p_redact, "modify INPUT itself, writing only the changed bytes")
@@ -277,8 +279,11 @@ def _run_redaction(
 
 def cmd_redact(args: argparse.Namespace) -> int:
     _check_destination(args)
-    if not args.region and not args.scrub:
-        raise SystemExit("redact: at least one --region is required (or use --scrub)")
+    if not (args.region or args.scrub or args.drop_label or args.drop_macro):
+        raise SystemExit(
+            "redact: nothing to do; give --region, --scrub, --drop-label "
+            "or --drop-macro"
+        )
     report = _run_redaction(
         args, args.region, args.scrub, fill=args.fill, use_dct=not args.no_dct
     )

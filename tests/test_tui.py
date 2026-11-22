@@ -126,7 +126,7 @@ def test_s_toggles_scrub_and_p_restores_the_profile(tmp_path: Path) -> None:
     async def session(pilot: Pilot[browse.Plan]) -> None:
         await pilot.press("s")
         assert not app.plan.scrub
-        assert browse.DROP_NEEDS_MORE in plan_text(app)
+        assert "redact" in plan_text(app) and "--scrub" not in plan_text(app)
         await move_to(pilot, LABEL_ROW)
         await pilot.press("d", "p")
         assert app.plan.scrub

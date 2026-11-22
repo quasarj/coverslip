@@ -22,9 +22,6 @@ DROP_FLAGS: dict[Role, str] = {Role.LABEL: "--drop-label", Role.MACRO: "--drop-m
 """The images ``redact`` and ``scrub`` can remove, and the flag for each."""
 
 NOTHING_TO_DO = "nothing flagged"
-DROP_NEEDS_MORE = (
-    "dropping images needs metadata scrubbing (s) or a drawn region as well"
-)
 
 
 class TuiUnavailableError(Exception):
@@ -100,14 +97,14 @@ def _region_words(plan: Plan) -> list[str]:
 def command(plan: Plan) -> str | None:
     """The command that carries out ``plan``; OUTPUT is left to fill in.
 
-    ``None`` when there is nothing to run, or nothing ``redact`` accepts:
-    it refuses to drop images without also scrubbing or redacting a region.
+    ``scrub`` when metadata is all that is redacted, ``redact`` otherwise;
+    ``None`` when nothing is flagged at all.
     """
-    if plan.regions:
+    if plan.scrub and not plan.regions:
+        words = ["scrub", plan.path, "OUTPUT", *_drop_words(plan)]
+    elif plan.regions or plan.drop:
         words = ["redact", plan.path, "OUTPUT", *_region_words(plan)]
         words += _drop_words(plan) + (["--scrub"] if plan.scrub else [])
-    elif plan.scrub:
-        words = ["scrub", plan.path, "OUTPUT", *_drop_words(plan)]
     else:
         return None
     return shlex.join(["coverslip", *words])
@@ -116,6 +113,4 @@ def command(plan: Plan) -> str | None:
 def describe(plan: Plan) -> str:
     """One line saying what quitting the browser will print."""
     line = command(plan)
-    if line is not None:
-        return line
-    return DROP_NEEDS_MORE if plan.drop else NOTHING_TO_DO
+    return line if line is not None else NOTHING_TO_DO
